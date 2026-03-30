@@ -1164,9 +1164,7 @@ func (m *UI) handleClickFocus(msg tea.MouseClickMsg) (cmd tea.Cmd) {
 		cmd = m.textarea.Focus()
 		m.chat.Blur()
 	case m.focus != uiFocusMain && image.Pt(msg.X, msg.Y).In(m.layout.main):
-		m.focus = uiFocusMain
-		m.textarea.Blur()
-		m.chat.Focus()
+		// Keep focus in editor; do not switch to chat mode.
 	}
 	return cmd
 }
@@ -1877,13 +1875,8 @@ func (m *UI) handleKeyPressMsg(msg tea.KeyPressMsg) tea.Cmd {
 				if cmd := m.newSession(); cmd != nil {
 					cmds = append(cmds, cmd)
 				}
-			case key.Matches(msg, m.keyMap.Tab):
-				if m.state != uiLanding {
-					m.setState(m.state, uiFocusMain)
-					m.textarea.Blur()
-					m.chat.Focus()
-					m.chat.SetSelected(m.chat.Len() - 1)
-				}
+		case key.Matches(msg, m.keyMap.Tab):
+				break
 			case msg.Keystroke() == "alt+shift+e":
 				if m.isAgentBusy() {
 					cmds = append(cmds, util.ReportWarn("Agent is working, please wait..."))
