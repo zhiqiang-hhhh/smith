@@ -12,6 +12,7 @@ import (
 	"github.com/charmbracelet/crush/internal/ui/chat"
 	"github.com/charmbracelet/crush/internal/ui/common"
 	"github.com/charmbracelet/crush/internal/ui/list"
+	"github.com/charmbracelet/crush/internal/ui/styles"
 	uv "github.com/charmbracelet/ultraviolet"
 	"github.com/charmbracelet/x/ansi"
 	"github.com/clipperhouse/displaywidth"
@@ -113,9 +114,12 @@ func (m *Chat) Draw(scr uv.Screen, area uv.Rectangle) {
 		s.Chat.ScrollbarThumb, s.Chat.ScrollbarTrack,
 		viewportHeight, totalHeight, viewportHeight, offset,
 	)
+	sbArea := image.Rect(area.Max.X-scrollbarWidth, area.Min.Y, area.Max.X, area.Max.Y)
 	if scrollbar != "" {
-		sbArea := image.Rect(area.Max.X-scrollbarWidth, area.Min.Y, area.Max.X, area.Max.Y)
 		uv.NewStyledString(scrollbar).Draw(scr, sbArea)
+	} else {
+		// Always draw the track line so the right edge stays clean.
+		m.drawScrollbarTrack(scr, sbArea)
 	}
 
 	// Show a follow-mode indicator at the bottom-right when following.
@@ -123,6 +127,21 @@ func (m *Chat) Draw(scr uv.Screen, area uv.Rectangle) {
 		indicator := s.Chat.ScrollbarThumb.Render("▼")
 		indicatorArea := image.Rect(area.Max.X-scrollbarWidth, area.Max.Y-1, area.Max.X, area.Max.Y)
 		uv.NewStyledString(indicator).Draw(scr, indicatorArea)
+	}
+}
+
+// drawScrollbarTrack draws a faint track line when there is nothing to scroll.
+func (m *Chat) drawScrollbarTrack(scr uv.Screen, area uv.Rectangle) {
+	fg := m.com.Styles.Border
+	bg := m.com.Styles.Background
+	x := area.Min.X
+	for y := area.Min.Y; y < area.Max.Y; y++ {
+		if c := scr.CellAt(x, y); c != nil {
+			c.Content = styles.ScrollbarTrack
+			c.Width = 1
+			c.Style.Fg = fg
+			c.Style.Bg = bg
+		}
 	}
 }
 

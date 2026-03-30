@@ -371,7 +371,7 @@ func New(com *common.Common, initialSessionID string, continueLast bool) *UI {
 
 	status := NewStatus(com, ui)
 
-	ui.setEditorPrompt(false)
+	ui.setEditorPrompt(com.App.Permissions.SkipRequests())
 	ui.randomizePlaceholders()
 	ui.textarea.Placeholder = ui.readyPlaceholder
 	ui.status = status
@@ -2203,8 +2203,6 @@ func (m *UI) Draw(scr uv.Screen, area uv.Rectangle) *tea.Cursor {
 			uv.NewStyledString(m.pillsView).Draw(scr, layout.pills)
 		}
 
-		m.drawSeparator(scr, layout.separator)
-
 		editorWidth := layout.editor.Dx()
 		editor := uv.NewStyledString(m.renderEditorView(editorWidth))
 		editor.Draw(scr, layout.editor)
@@ -2725,15 +2723,8 @@ func (m *UI) generateLayout(w, h int) uiLayout {
 			} else {
 				uiLayout.main = mainRect
 			}
-			// Reserve 3 rows between chat and editor for the separator:
-			// row 0: chat bottom border (╰───╯)
-			// row 1: gap
-			// row 2: editor top border (╭───╮)
-			uiLayout.separator = image.Rect(
-				uiLayout.main.Min.X, uiLayout.main.Max.Y-2,
-				uiLayout.main.Max.X, uiLayout.main.Max.Y+1,
-			)
-			uiLayout.main.Max.Y -= 3
+			// Add bottom margin to main
+			uiLayout.main.Max.Y -= 1
 			uiLayout.editor = editorRect
 		} else {
 			// Layout
@@ -2756,9 +2747,6 @@ func (m *UI) generateLayout(w, h int) uiLayout {
 			fullSideRect.Max.Y = uiLayout.area.Max.Y
 			uiLayout.sidebar = fullSideRect
 
-			// Content area extends to the top, matching the sidebar.
-			contentRect.Min.Y = uiLayout.area.Min.Y
-
 			// Narrow the status bar to only span the right content area.
 			uiLayout.status.Min.X = contentRect.Min.X
 			uiLayout.status.Max.X = contentRect.Max.X
@@ -2775,15 +2763,8 @@ func (m *UI) generateLayout(w, h int) uiLayout {
 			} else {
 				uiLayout.main = mainRect
 			}
-			// Reserve 3 rows between chat and editor for the separator:
-			// row 0: chat bottom border (╰───╯)
-			// row 1: gap
-			// row 2: editor top border (╭───╮)
-			uiLayout.separator = image.Rect(
-				uiLayout.main.Min.X, uiLayout.main.Max.Y-2,
-				uiLayout.main.Max.X, uiLayout.main.Max.Y+1,
-			)
-			uiLayout.main.Max.Y -= 3
+			// Add bottom margin to main
+			uiLayout.main.Max.Y -= 1
 			uiLayout.editor = editorRect
 		}
 	}
@@ -2813,9 +2794,6 @@ type uiLayout struct {
 
 	// sidebar is the area for the sidebar.
 	sidebar uv.Rectangle
-
-	// separator is the horizontal divider between chat and editor.
-	separator uv.Rectangle
 
 	// status is the area for the status view.
 	status uv.Rectangle
