@@ -460,6 +460,26 @@ func PromptWithTextAttachments(prompt string, attachments []Attachment) string {
 	return sb.String()
 }
 
+// RepairUnfinished detects assistant messages that were persisted without a
+// Finish part (e.g. due to a crash or provider error mid-stream) and adds a
+// synthetic error finish so the UI does not show an infinite spinner.
+// It also marks any unfinished tool calls as finished.
+func (m *Message) RepairUnfinished() {
+	if m.Role != Assistant {
+		return
+	}
+	if m.IsFinished() {
+		return
+	}
+	for i, part := range m.Parts {
+		if tc, ok := part.(ToolCall); ok && !tc.Finished {
+			tc.Finished = true
+			m.Parts[i] = tc
+		}
+	}
+	m.AddFinish(FinishReasonError, "Interrupted", "Session was interrupted before the response completed")
+}
+
 func (m *Message) ToAIMessage() []fantasy.Message {
 	var messages []fantasy.Message
 	switch m.Role {

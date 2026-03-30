@@ -21,6 +21,7 @@ import (
 	"github.com/charmbracelet/crush/internal/agent/notify"
 	"github.com/charmbracelet/crush/internal/agent/prompt"
 	"github.com/charmbracelet/crush/internal/agent/tools"
+	"github.com/charmbracelet/crush/internal/askuser"
 	"github.com/charmbracelet/crush/internal/config"
 	"github.com/charmbracelet/crush/internal/filetracker"
 	"github.com/charmbracelet/crush/internal/history"
@@ -78,6 +79,7 @@ type coordinator struct {
 	sessions    session.Service
 	messages    message.Service
 	permissions permission.Service
+	askuser     askuser.Service
 	history     history.Service
 	filetracker filetracker.Service
 	lspManager  *lsp.Manager
@@ -95,6 +97,7 @@ func NewCoordinator(
 	sessions session.Service,
 	messages message.Service,
 	permissions permission.Service,
+	askuser askuser.Service,
 	history history.Service,
 	filetracker filetracker.Service,
 	lspManager *lsp.Manager,
@@ -105,6 +108,7 @@ func NewCoordinator(
 		sessions:    sessions,
 		messages:    messages,
 		permissions: permissions,
+		askuser:     askuser,
 		history:     history,
 		filetracker: filetracker,
 		lspManager:  lspManager,
@@ -134,8 +138,17 @@ func NewCoordinator(
 
 // Run implements Coordinator.
 func (c *coordinator) Run(ctx context.Context, sessionID string, prompt string, attachments ...message.Attachment) (*fantasy.AgentResult, error) {
-	if err := c.readyWg.Wait(); err != nil {
-		return nil, err
+	// Wait for the readyWg (prompt build + tool build) to finish, but
+	// respect the caller's context so a user cancellation isn't blocked.
+	readyCh := make(chan error, 1)
+	go func() { readyCh <- c.readyWg.Wait() }()
+	select {
+	case err := <-readyCh:
+		if err != nil {
+			return nil, err
+		}
+	case <-ctx.Done():
+		return nil, ctx.Err()
 	}
 
 	// refresh models before each run
@@ -391,7 +404,9 @@ func (c *coordinator) buildAgent(ctx context.Context, prompt *prompt.Prompt, age
 		SystemPrompt:         "",
 		IsSubAgent:           isSubAgent,
 		DisableAutoSummarize: c.cfg.Config().Options.DisableAutoSummarize,
+		AutoTitle:            c.cfg.Config().Options.AutoTitle,
 		IsYolo:               c.permissions.SkipRequests(),
+		DataDir:              c.cfg.Config().Options.DataDirectory,
 		Sessions:             c.sessions,
 		Messages:             c.messages,
 		Tools:                nil,
@@ -437,6 +452,14 @@ func (c *coordinator) buildTools(ctx context.Context, agent config.Agent) ([]fan
 		allTools = append(allTools, agenticFetchTool)
 	}
 
+	if slices.Contains(agent.AllowedTools, tools.MemorySearchToolName) {
+		memorySearchTool, err := c.memorySearchTool(ctx)
+		if err != nil {
+			return nil, err
+		}
+		allTools = append(allTools, memorySearchTool)
+	}
+
 	// Get the model name for the agent
 	modelName := ""
 	if modelCfg, ok := c.cfg.Config().Models[agent.Model]; ok {
@@ -446,9 +469,11 @@ func (c *coordinator) buildTools(ctx context.Context, agent config.Agent) ([]fan
 	}
 
 	allTools = append(allTools,
+		tools.NewAskUserTool(c.askuser),
 		tools.NewBashTool(c.permissions, c.cfg.WorkingDir(), c.cfg.Config().Options.Attribution, modelName),
 		tools.NewJobOutputTool(),
 		tools.NewJobKillTool(),
+		tools.NewDiffTool(c.cfg.WorkingDir()),
 		tools.NewDownloadTool(c.permissions, c.cfg.WorkingDir(), nil),
 		tools.NewEditTool(c.lspManager, c.permissions, c.history, c.filetracker, c.cfg.WorkingDir()),
 		tools.NewMultiEditTool(c.lspManager, c.permissions, c.history, c.filetracker, c.cfg.WorkingDir()),
@@ -456,14 +481,16 @@ func (c *coordinator) buildTools(ctx context.Context, agent config.Agent) ([]fan
 		tools.NewGlobTool(c.cfg.WorkingDir()),
 		tools.NewGrepTool(c.cfg.WorkingDir(), c.cfg.Config().Tools.Grep),
 		tools.NewLsTool(c.permissions, c.cfg.WorkingDir(), c.cfg.Config().Tools.Ls),
+		tools.NewPlanModeTool(),
 		tools.NewSourcegraphTool(nil),
 		tools.NewTodosTool(c.sessions),
 		tools.NewViewTool(c.lspManager, c.permissions, c.filetracker, c.cfg.WorkingDir(), c.cfg.Config().Options.SkillsPaths...),
+		tools.NewWebSearchTool(nil),
 		tools.NewWriteTool(c.lspManager, c.permissions, c.history, c.filetracker, c.cfg.WorkingDir()),
 	)
 
 	// Add LSP tools if user has configured LSPs or auto_lsp is enabled (nil or true).
-	if len(c.cfg.Config().LSP) > 0 || c.cfg.Config().Options.AutoLSP == nil || *c.cfg.Config().Options.AutoLSP {
+	if len(c.cfg.Config().LSP) > 0 || c.lspManager.AutoLSPEnabled() {
 		allTools = append(allTools, tools.NewDiagnosticsTool(c.lspManager), tools.NewReferencesTool(c.lspManager), tools.NewLSPRestartTool(c.lspManager))
 	}
 
@@ -601,11 +628,11 @@ func (c *coordinator) buildAnthropicProvider(baseURL, apiKey string, headers map
 	switch {
 	case strings.HasPrefix(apiKey, "Bearer "):
 		// NOTE: Prevent the SDK from picking up the API key from env.
-		os.Setenv("ANTHROPIC_API_KEY", "")
+		opts = append(opts, anthropic.WithAPIKey(""))
 		headers["Authorization"] = apiKey
 	case providerID == string(catwalk.InferenceProviderMiniMax) || providerID == string(catwalk.InferenceProviderMiniMaxChina):
 		// NOTE: Prevent the SDK from picking up the API key from env.
-		os.Setenv("ANTHROPIC_API_KEY", "")
+		opts = append(opts, anthropic.WithAPIKey(""))
 		headers["Authorization"] = "Bearer " + apiKey
 	case apiKey != "":
 		// X-Api-Key header
@@ -1006,7 +1033,7 @@ func (c *coordinator) runSubAgent(ctx context.Context, params subAgentParams) (f
 		NonInteractive:   true,
 	})
 	if err != nil {
-		return fantasy.NewTextErrorResponse("error generating response"), nil
+		return fantasy.NewTextErrorResponse(fmt.Sprintf("error generating response: %v", err)), nil
 	}
 
 	// Update parent session cost

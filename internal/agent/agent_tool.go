@@ -62,6 +62,9 @@ func (c *coordinator) agentTool(ctx context.Context) (fantasy.AgentTool, error) 
 				ToolCallID:     call.ID,
 				Prompt:         params.Prompt,
 				SessionTitle:   "New Agent Session",
+				SessionSetup: func(sid string) {
+					c.permissions.AutoApproveSession(sid)
+				},
 			})
 		}), nil
 }

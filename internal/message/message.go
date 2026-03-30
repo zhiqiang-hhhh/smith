@@ -20,12 +20,28 @@ type CreateMessageParams struct {
 	IsSummaryMessage bool
 }
 
+// MessageCursor identifies a position in the message timeline for keyset
+// pagination. The zero value means "from the newest message".
+type MessageCursor struct {
+	CreatedAt int64
+	ID        string
+}
+
+// MessagePage holds a page of messages plus pagination metadata.
+type MessagePage struct {
+	Messages []Message
+	HasMore  bool
+	Cursor   MessageCursor // position of the oldest message in this page
+}
+
 type Service interface {
 	pubsub.Subscriber[Message]
 	Create(ctx context.Context, sessionID string, params CreateMessageParams) (Message, error)
 	Update(ctx context.Context, message Message) error
 	Get(ctx context.Context, id string) (Message, error)
 	List(ctx context.Context, sessionID string) ([]Message, error)
+	ListRecent(ctx context.Context, sessionID string, limit int) (MessagePage, error)
+	ListBefore(ctx context.Context, sessionID string, cursor MessageCursor, limit int) (MessagePage, error)
 	ListUserMessages(ctx context.Context, sessionID string) ([]Message, error)
 	ListAllUserMessages(ctx context.Context) ([]Message, error)
 	Delete(ctx context.Context, id string) error
@@ -187,6 +203,76 @@ func (s *service) ListAllUserMessages(ctx context.Context) ([]Message, error) {
 		}
 	}
 	return messages, nil
+}
+
+func (s *service) ListRecent(ctx context.Context, sessionID string, limit int) (MessagePage, error) {
+	if limit <= 0 {
+		return MessagePage{}, nil
+	}
+	dbMessages, err := s.q.ListRecentMessagesBySession(ctx, db.ListRecentMessagesBySessionParams{
+		SessionID: sessionID,
+		Limit:     int64(limit + 1),
+	})
+	if err != nil {
+		return MessagePage{}, err
+	}
+	hasMore := len(dbMessages) > limit
+	if hasMore {
+		dbMessages = dbMessages[:limit]
+	}
+	// Reverse to chronological order (ASC).
+	for i, j := 0, len(dbMessages)-1; i < j; i, j = i+1, j-1 {
+		dbMessages[i], dbMessages[j] = dbMessages[j], dbMessages[i]
+	}
+	messages := make([]Message, len(dbMessages))
+	for i, dbMsg := range dbMessages {
+		messages[i], err = s.fromDBItem(dbMsg)
+		if err != nil {
+			return MessagePage{}, err
+		}
+	}
+	var cursor MessageCursor
+	if len(messages) > 0 {
+		oldest := messages[0]
+		cursor = MessageCursor{CreatedAt: oldest.CreatedAt, ID: oldest.ID}
+	}
+	return MessagePage{Messages: messages, HasMore: hasMore, Cursor: cursor}, nil
+}
+
+func (s *service) ListBefore(ctx context.Context, sessionID string, cursor MessageCursor, limit int) (MessagePage, error) {
+	if limit <= 0 {
+		return MessagePage{}, nil
+	}
+	dbMessages, err := s.q.ListMessagesBySessionBefore(ctx, db.ListMessagesBySessionBeforeParams{
+		SessionID: sessionID,
+		CreatedAt: cursor.CreatedAt,
+		ID:        cursor.ID,
+		Limit:     int64(limit + 1),
+	})
+	if err != nil {
+		return MessagePage{}, err
+	}
+	hasMore := len(dbMessages) > limit
+	if hasMore {
+		dbMessages = dbMessages[:limit]
+	}
+	// Reverse to chronological order (ASC).
+	for i, j := 0, len(dbMessages)-1; i < j; i, j = i+1, j-1 {
+		dbMessages[i], dbMessages[j] = dbMessages[j], dbMessages[i]
+	}
+	messages := make([]Message, len(dbMessages))
+	for i, dbMsg := range dbMessages {
+		messages[i], err = s.fromDBItem(dbMsg)
+		if err != nil {
+			return MessagePage{}, err
+		}
+	}
+	var newCursor MessageCursor
+	if len(messages) > 0 {
+		oldest := messages[0]
+		newCursor = MessageCursor{CreatedAt: oldest.CreatedAt, ID: oldest.ID}
+	}
+	return MessagePage{Messages: messages, HasMore: hasMore, Cursor: newCursor}, nil
 }
 
 func (s *service) fromDBItem(item db.Message) (Message, error) {

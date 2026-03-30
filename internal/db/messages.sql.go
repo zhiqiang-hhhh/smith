@@ -249,3 +249,99 @@ func (q *Queries) UpdateMessage(ctx context.Context, arg UpdateMessageParams) er
 	_, err := q.exec(ctx, q.updateMessageStmt, updateMessage, arg.Parts, arg.FinishedAt, arg.ID)
 	return err
 }
+
+const listRecentMessagesBySession = `-- name: ListRecentMessagesBySession :many
+SELECT id, session_id, role, parts, model, created_at, updated_at, finished_at, provider, is_summary_message
+FROM messages
+WHERE session_id = ?
+ORDER BY created_at DESC
+LIMIT ?
+`
+
+type ListRecentMessagesBySessionParams struct {
+	SessionID string `json:"session_id"`
+	Limit     int64  `json:"limit"`
+}
+
+func (q *Queries) ListRecentMessagesBySession(ctx context.Context, arg ListRecentMessagesBySessionParams) ([]Message, error) {
+	rows, err := q.query(ctx, q.listRecentMessagesBySessionStmt, listRecentMessagesBySession, arg.SessionID, arg.Limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []Message{}
+	for rows.Next() {
+		var i Message
+		if err := rows.Scan(
+			&i.ID,
+			&i.SessionID,
+			&i.Role,
+			&i.Parts,
+			&i.Model,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+			&i.FinishedAt,
+			&i.Provider,
+			&i.IsSummaryMessage,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listMessagesBySessionBefore = `-- name: ListMessagesBySessionBefore :many
+SELECT id, session_id, role, parts, model, created_at, updated_at, finished_at, provider, is_summary_message
+FROM messages
+WHERE session_id = ? AND (created_at < ? OR (created_at = ? AND id < ?))
+ORDER BY created_at DESC, id DESC
+LIMIT ?
+`
+
+type ListMessagesBySessionBeforeParams struct {
+	SessionID string `json:"session_id"`
+	CreatedAt int64  `json:"created_at"`
+	ID        string `json:"id"`
+	Limit     int64  `json:"limit"`
+}
+
+func (q *Queries) ListMessagesBySessionBefore(ctx context.Context, arg ListMessagesBySessionBeforeParams) ([]Message, error) {
+	rows, err := q.query(ctx, q.listMessagesBySessionBeforeStmt, listMessagesBySessionBefore, arg.SessionID, arg.CreatedAt, arg.CreatedAt, arg.ID, arg.Limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []Message{}
+	for rows.Next() {
+		var i Message
+		if err := rows.Scan(
+			&i.ID,
+			&i.SessionID,
+			&i.Role,
+			&i.Parts,
+			&i.Model,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+			&i.FinishedAt,
+			&i.Provider,
+			&i.IsSummaryMessage,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}

@@ -53,3 +53,17 @@ SELECT *
 FROM messages
 WHERE role = 'user'
 ORDER BY created_at DESC;
+
+-- name: ListRecentMessagesBySession :many
+SELECT *
+FROM messages
+WHERE session_id = ?
+ORDER BY created_at DESC
+LIMIT ?;
+
+-- name: ListMessagesBySessionBefore :many
+SELECT *
+FROM messages
+WHERE session_id = ? AND (created_at < ? OR (created_at = ? AND id < ?))
+ORDER BY created_at DESC, id DESC
+LIMIT ?;

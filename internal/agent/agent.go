@@ -12,15 +12,19 @@ import (
 	"context"
 	_ "embed"
 	"encoding/base64"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"log/slog"
 	"os"
+	"path/filepath"
 	"regexp"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
 	"time"
+	"unicode/utf8"
 
 	"charm.land/catwalk/pkg/catwalk"
 	"charm.land/fantasy"
@@ -53,9 +57,20 @@ const (
 	largeContextWindowThreshold = 200_000
 	largeContextWindowBuffer    = 20_000
 	smallContextWindowRatio     = 0.2
+
+	// maxToolResultSize is the maximum character length for a single tool
+	// result before it gets truncated when sent to the LLM. This acts as a
+	// safety net to prevent oversized tool results from blowing up the
+	// context window. Individual tools should still enforce their own limits;
+	// this is a centralized backstop.
+	maxToolResultSize = 80_000
 )
 
 var userAgent = fmt.Sprintf("Charm-Crush/%s (https://charm.land/crush)", version.Version)
+
+// maxAutoSummarizeDepth limits recursive auto-summarize attempts to prevent
+// unbounded loops when summarization fails to reduce context.
+const maxAutoSummarizeDepth = 3
 
 //go:embed templates/title.md
 var titlePrompt []byte
@@ -64,7 +79,7 @@ var titlePrompt []byte
 var summaryPrompt []byte
 
 // Used to remove <think> tags from generated titles.
-var thinkTagRegex = regexp.MustCompile(`<think>.*?</think>`)
+var thinkTagRegex = regexp.MustCompile(`(?s)<think>.*?</think>`)
 
 type SessionAgentCall struct {
 	SessionID        string
@@ -78,6 +93,10 @@ type SessionAgentCall struct {
 	FrequencyPenalty *float64
 	PresencePenalty  *float64
 	NonInteractive   bool
+
+	// autoSummarizeDepth tracks recursive auto-summarize attempts to
+	// prevent unbounded recursion.
+	autoSummarizeDepth int
 }
 
 type SessionAgent interface {
@@ -113,7 +132,9 @@ type sessionAgent struct {
 	sessions             session.Service
 	messages             message.Service
 	disableAutoSummarize bool
+	autoTitle            bool
 	isYolo               bool
+	dataDir              string
 	notify               pubsub.Publisher[notify.Notification]
 
 	messageQueue   *csync.Map[string, []SessionAgentCall]
@@ -127,7 +148,9 @@ type SessionAgentOptions struct {
 	SystemPrompt         string
 	IsSubAgent           bool
 	DisableAutoSummarize bool
+	AutoTitle            bool
 	IsYolo               bool
+	DataDir              string
 	Sessions             session.Service
 	Messages             message.Service
 	Tools                []fantasy.AgentTool
@@ -146,8 +169,10 @@ func NewSessionAgent(
 		sessions:             opts.Sessions,
 		messages:             opts.Messages,
 		disableAutoSummarize: opts.DisableAutoSummarize,
+		autoTitle:            opts.AutoTitle,
 		tools:                csync.NewSliceFrom(opts.Tools),
 		isYolo:               opts.IsYolo,
+		dataDir:              opts.DataDir,
 		notify:               opts.Notify,
 		messageQueue:         csync.NewMap[string, []SessionAgentCall](),
 		activeRequests:       csync.NewMap[string, context.CancelFunc](),
@@ -164,12 +189,9 @@ func (a *sessionAgent) Run(ctx context.Context, call SessionAgentCall) (*fantasy
 
 	// Queue the message if busy
 	if a.IsSessionBusy(call.SessionID) {
-		existing, ok := a.messageQueue.Get(call.SessionID)
-		if !ok {
-			existing = []SessionAgentCall{}
-		}
-		existing = append(existing, call)
-		a.messageQueue.Set(call.SessionID, existing)
+		a.messageQueue.Update(call.SessionID, func(existing []SessionAgentCall) []SessionAgentCall {
+			return append(existing, call)
+		})
 		return nil, nil
 	}
 
@@ -217,15 +239,14 @@ func (a *sessionAgent) Run(ctx context.Context, call SessionAgentCall) (*fantasy
 		return nil, fmt.Errorf("failed to get session messages: %w", err)
 	}
 
-	var wg sync.WaitGroup
-	// Generate title if first message.
-	if len(msgs) == 0 {
+	// Generate or update the session title in the background.
+	// When autoTitle is enabled, update the title on every turn.
+	// Otherwise, only generate a title for the first message.
+	// Title generation runs independently and does not block Run() return.
+	if a.autoTitle || len(msgs) == 0 {
 		titleCtx := ctx // Copy to avoid race with ctx reassignment below.
-		wg.Go(func() {
-			a.generateTitle(titleCtx, call.SessionID, call.Prompt)
-		})
+		go a.generateTitle(titleCtx, call.SessionID, msgs, call.Prompt)
 	}
-	defer wg.Wait()
 
 	// Add the user message to the session.
 	_, err = a.createUserMessage(ctx, call)
@@ -249,6 +270,7 @@ func (a *sessionAgent) Run(ctx context.Context, call SessionAgentCall) (*fantasy
 
 	var currentAssistant *message.Message
 	var shouldSummarize bool
+	planModeActive := detectPlanMode(msgs)
 	result, err := agent.Stream(genCtx, fantasy.AgentStreamCall{
 		Prompt:           message.PromptWithTextAttachments(call.Prompt, call.Attachments),
 		Files:            files,
@@ -269,8 +291,17 @@ func (a *sessionAgent) Run(ctx context.Context, call SessionAgentCall) (*fantasy
 			// Use latest tools (updated by SetTools when MCP tools change).
 			prepared.Tools = a.tools.Copy()
 
-			queuedCalls, _ := a.messageQueue.Get(call.SessionID)
-			a.messageQueue.Del(call.SessionID)
+			// In plan mode, restrict to read-only tools only.
+			// Filter both ActiveTools (LLM visibility) and Tools
+			// (execution) to prevent write tools from running.
+			if planModeActive {
+				prepared.ActiveTools = planModeReadOnlyTools
+				prepared.Tools = slices.DeleteFunc(prepared.Tools, func(t fantasy.AgentTool) bool {
+					return !slices.Contains(planModeReadOnlyTools, t.Info().Name)
+				})
+			}
+
+			queuedCalls, _ := a.messageQueue.Take(call.SessionID)
 			for _, queued := range queuedCalls {
 				userMessage, createErr := a.createUserMessage(callContext, queued)
 				if createErr != nil {
@@ -280,6 +311,7 @@ func (a *sessionAgent) Run(ctx context.Context, call SessionAgentCall) (*fantasy
 			}
 
 			prepared.Messages = a.workaroundProviderMediaLimitations(prepared.Messages, largeModel)
+			prepared.Messages = truncateLargeToolResults(prepared.Messages)
 
 			lastSystemRoleInx := 0
 			systemMessageUpdated := false
@@ -385,6 +417,9 @@ func (a *sessionAgent) Run(ctx context.Context, call SessionAgentCall) (*fantasy
 			return a.messages.Update(ctx, *currentAssistant)
 		},
 		OnToolResult: func(result fantasy.ToolResultContent) error {
+			if active, ok := updatePlanModeFromResult(result); ok {
+				planModeActive = active
+			}
 			toolResult := a.convertToToolResult(result)
 			// Use parent ctx instead of genCtx to ensure the message is created
 			// even if the request is canceled mid-stream
@@ -448,6 +483,27 @@ func (a *sessionAgent) Run(ctx context.Context, call SessionAgentCall) (*fantasy
 	a.eventPromptResponded(call.SessionID, time.Since(startTime).Truncate(time.Second))
 
 	if err != nil {
+		var contextTooLargeErr *fantasy.ProviderError
+		if errors.As(err, &contextTooLargeErr) && contextTooLargeErr.IsContextTooLarge() && !a.disableAutoSummarize {
+			if call.autoSummarizeDepth >= maxAutoSummarizeDepth {
+				return nil, fmt.Errorf("context too large after %d auto-summarize attempts", maxAutoSummarizeDepth)
+			}
+			slog.Warn("Context too large, triggering auto-summarize",
+				"session_id", call.SessionID,
+				"used_tokens", contextTooLargeErr.ContextUsedTokens,
+				"max_tokens", contextTooLargeErr.ContextMaxTokens,
+			)
+			cancel()
+			a.activeRequests.Del(call.SessionID)
+			if summarizeErr := a.Summarize(ctx, call.SessionID, call.ProviderOptions); summarizeErr != nil {
+				slog.Error("Auto-summarize after context overflow failed", "error", summarizeErr)
+				return nil, fmt.Errorf("context too large and auto-summarize failed: %w", summarizeErr)
+			}
+			call.Prompt = "The conversation was automatically summarized because the context got too long. The summary above contains the full conversation state including any tool results and user answers. Please continue where you left off."
+			call.autoSummarizeDepth++
+			return a.Run(ctx, call)
+		}
+
 		isCancelErr := errors.Is(err, context.Canceled)
 		isPermissionErr := errors.Is(err, permission.ErrorPermissionDenied)
 		if currentAssistant == nil {
@@ -560,33 +616,39 @@ func (a *sessionAgent) Run(ctx context.Context, call SessionAgentCall) (*fantasy
 	}
 
 	if shouldSummarize {
-		a.activeRequests.Del(call.SessionID)
-		if summarizeErr := a.Summarize(genCtx, call.SessionID, call.ProviderOptions); summarizeErr != nil {
-			return nil, summarizeErr
-		}
-		// If the agent wasn't done...
-		if len(currentAssistant.ToolCalls()) > 0 {
-			existing, ok := a.messageQueue.Get(call.SessionID)
-			if !ok {
-				existing = []SessionAgentCall{}
+		if call.autoSummarizeDepth >= maxAutoSummarizeDepth {
+			slog.Warn("Skipping auto-summarize, max depth reached",
+				"session_id", call.SessionID,
+				"depth", call.autoSummarizeDepth,
+			)
+		} else {
+			a.activeRequests.Del(call.SessionID)
+			if summarizeErr := a.Summarize(ctx, call.SessionID, call.ProviderOptions); summarizeErr != nil {
+				return nil, summarizeErr
 			}
-			call.Prompt = fmt.Sprintf("The previous session was interrupted because it got too long, the initial user request was: `%s`", call.Prompt)
-			existing = append(existing, call)
-			a.messageQueue.Set(call.SessionID, existing)
+			// If the agent wasn't done...
+			if len(currentAssistant.ToolCalls()) > 0 {
+				call.Prompt = "The conversation was automatically summarized because the context got too long. The summary above contains the full conversation state including any tool results and user answers. Please continue where you left off."
+				call.autoSummarizeDepth++
+				a.messageQueue.Update(call.SessionID, func(existing []SessionAgentCall) []SessionAgentCall {
+					return append(existing, call)
+				})
+			}
 		}
 	}
-
 	// Release active request before processing queued messages.
 	a.activeRequests.Del(call.SessionID)
 	cancel()
 
-	queuedMessages, ok := a.messageQueue.Get(call.SessionID)
+	queuedMessages, ok := a.messageQueue.Take(call.SessionID)
 	if !ok || len(queuedMessages) == 0 {
 		return result, err
 	}
 	// There are queued messages restart the loop.
 	firstQueuedMessage := queuedMessages[0]
-	a.messageQueue.Set(call.SessionID, queuedMessages[1:])
+	if len(queuedMessages) > 1 {
+		a.messageQueue.Set(call.SessionID, queuedMessages[1:])
+	}
 	return a.Run(ctx, firstQueuedMessage)
 }
 
@@ -612,6 +674,10 @@ func (a *sessionAgent) Summarize(ctx context.Context, sessionID string, opts fan
 		return nil
 	}
 
+	if err := a.saveTranscript(ctx, sessionID); err != nil {
+		slog.Warn("failed to save transcript", "error", err)
+	}
+
 	aiMsgs, _ := a.preparePrompt(msgs)
 
 	genCtx, cancel := context.WithCancel(ctx)
@@ -625,15 +691,15 @@ func (a *sessionAgent) Summarize(ctx context.Context, sessionID string, opts fan
 	)
 	summaryMessage, err := a.messages.Create(ctx, sessionID, message.CreateMessageParams{
 		Role:             message.Assistant,
-		Model:            largeModel.Model.Model(),
-		Provider:         largeModel.Model.Provider(),
+		Model:            largeModel.ModelCfg.Model,
+		Provider:         largeModel.ModelCfg.Provider,
 		IsSummaryMessage: true,
 	})
 	if err != nil {
 		return err
 	}
 
-	summaryPromptText := buildSummaryPrompt(currentSession.Todos)
+	summaryPromptText := buildSummaryPrompt(a.dataDir, sessionID, currentSession.Todos)
 
 	resp, err := agent.Stream(genCtx, fantasy.AgentStreamCall{
 		Prompt:          summaryPromptText,
@@ -681,6 +747,10 @@ func (a *sessionAgent) Summarize(ctx context.Context, sessionID string, opts fan
 		return err
 	}
 
+	if err := a.extractAndSaveKeyFacts(sessionID, summaryMessage.Content().Text); err != nil {
+		slog.Warn("failed to save key facts", "error", err)
+	}
+
 	var openrouterCost *float64
 	for _, step := range resp.Steps {
 		stepCost := a.openrouterCost(step.ProviderMetadata)
@@ -700,7 +770,7 @@ func (a *sessionAgent) Summarize(ctx context.Context, sessionID string, opts fan
 	currentSession.SummaryMessageID = summaryMessage.ID
 	currentSession.CompletionTokens = usage.OutputTokens
 	currentSession.PromptTokens = 0
-	_, err = a.sessions.Save(genCtx, currentSession)
+	_, err = a.sessions.Save(ctx, currentSession)
 	return err
 }
 
@@ -740,6 +810,13 @@ func (a *sessionAgent) createUserMessage(ctx context.Context, call SessionAgentC
 
 func (a *sessionAgent) preparePrompt(msgs []message.Message, attachments ...message.Attachment) ([]fantasy.Message, []fantasy.FilePart) {
 	var history []fantasy.Message
+	hasSummary := false
+	for _, msg := range msgs {
+		if msg.IsSummaryMessage {
+			hasSummary = true
+			break
+		}
+	}
 	if !a.isSubAgent {
 		history = append(history, fantasy.NewUserMessage(
 			fmt.Sprintf("<system_reminder>%s</system_reminder>",
@@ -748,6 +825,20 @@ If you are working on tasks that would benefit from a todo list please use the "
 If not, please feel free to ignore. Again do not mention this message to the user.`,
 			),
 		))
+		if hasSummary {
+			history = append(history, fantasy.NewUserMessage(
+				fmt.Sprintf("<system_reminder>%s</system_reminder>",
+					`This session was summarized. If you need specific details from before the summary (commands, code, file paths, errors, decisions), use the "memory_search" tool to search the full transcript instead of guessing.`,
+				),
+			))
+			if len(msgs) > 0 && a.dataDir != "" {
+				if facts := loadKeyFacts(a.dataDir, msgs[0].SessionID); facts != "" {
+					history = append(history, fantasy.NewUserMessage(
+						fmt.Sprintf("<key_facts>\n%s\n</key_facts>", facts),
+					))
+				}
+			}
+		}
 	}
 	for _, m := range msgs {
 		if len(m.Parts) == 0 {
@@ -760,6 +851,8 @@ If not, please feel free to ignore. Again do not mention this message to the use
 		}
 		history = append(history, m.ToAIMessage()...)
 	}
+
+	history = repairOrphanedToolCalls(history)
 
 	var files []fantasy.FilePart
 	for _, attachment := range attachments {
@@ -774,6 +867,108 @@ If not, please feel free to ignore. Again do not mention this message to the use
 	}
 
 	return history, files
+}
+
+// repairOrphanedToolCalls scans the message history for assistant tool_use
+// blocks that have no corresponding tool_result and injects synthetic error
+// results so the provider API does not reject the request with a 400.
+// This can happen when the app exits while a tool (e.g. ask_user) is waiting
+// for input — the tool_use is persisted but the tool_result is not.
+func repairOrphanedToolCalls(history []fantasy.Message) []fantasy.Message {
+	// First pass: find which assistant messages have orphaned tool calls.
+	type orphanInfo struct {
+		// insertAfter is the index in history after which we inject the
+		// synthetic tool result message (after the last consecutive tool
+		// message following the assistant, or right after the assistant
+		// if there are none).
+		insertAfter int
+		ids         []string
+	}
+	var orphans []orphanInfo
+
+	for i, msg := range history {
+		if msg.Role != fantasy.MessageRoleAssistant {
+			continue
+		}
+
+		// Collect all tool call IDs from this assistant message.
+		var pendingIDs []string
+		for _, part := range msg.Content {
+			if tc, ok := fantasy.AsContentType[fantasy.ToolCallPart](part); ok {
+				pendingIDs = append(pendingIDs, tc.ToolCallID)
+			}
+		}
+		if len(pendingIDs) == 0 {
+			continue
+		}
+
+		// Look ahead for matching tool results in subsequent tool messages.
+		lastToolIdx := i
+		for j := i + 1; j < len(history); j++ {
+			next := history[j]
+			if next.Role != fantasy.MessageRoleTool {
+				break
+			}
+			lastToolIdx = j
+			for _, part := range next.Content {
+				if tr, ok := fantasy.AsContentType[fantasy.ToolResultPart](part); ok {
+					pendingIDs = removeFromSlice(pendingIDs, tr.ToolCallID)
+				}
+			}
+		}
+
+		if len(pendingIDs) > 0 {
+			orphans = append(orphans, orphanInfo{
+				insertAfter: lastToolIdx,
+				ids:         pendingIDs,
+			})
+		}
+	}
+
+	if len(orphans) == 0 {
+		return history
+	}
+
+	// Second pass: rebuild history with synthetic tool results injected.
+	insertAt := make(map[int][]string, len(orphans))
+	for _, o := range orphans {
+		insertAt[o.insertAfter] = append(insertAt[o.insertAfter], o.ids...)
+	}
+
+	var repaired []fantasy.Message
+	for i, msg := range history {
+		repaired = append(repaired, msg)
+		if ids, ok := insertAt[i]; ok {
+			var parts []fantasy.MessagePart
+			for _, id := range ids {
+				parts = append(parts, fantasy.ToolResultPart{
+					ToolCallID: id,
+					Output: fantasy.ToolResultOutputContentError{
+						Error: errors.New("no response received (session was interrupted)"),
+					},
+				})
+			}
+			repaired = append(repaired, fantasy.Message{
+				Role:    fantasy.MessageRoleTool,
+				Content: parts,
+			})
+		}
+	}
+	return repaired
+}
+
+// removeFromSlice returns a new slice with the first occurrence of val removed.
+func removeFromSlice(s []string, val string) []string {
+	result := make([]string, 0, len(s))
+	removed := false
+	for _, v := range s {
+		if !removed && v == val {
+			removed = true
+			continue
+		}
+		result = append(result, v)
+	}
+	return result
 }
 
 func (a *sessionAgent) getSessionMessages(ctx context.Context, session session.Session) ([]message.Message, error) {
@@ -798,9 +993,9 @@ func (a *sessionAgent) getSessionMessages(ctx context.Context, session session.S
 	return msgs, nil
 }
 
-// generateTitle generates a session titled based on the initial prompt.
-func (a *sessionAgent) generateTitle(ctx context.Context, sessionID string, userPrompt string) {
-	if userPrompt == "" {
+// generateTitle generates or updates a session title based on the conversation.
+func (a *sessionAgent) generateTitle(ctx context.Context, sessionID string, msgs []message.Message, userPrompt string) {
+	if userPrompt == "" && len(msgs) == 0 {
 		return
 	}
 
@@ -821,8 +1016,19 @@ func (a *sessionAgent) generateTitle(ctx context.Context, sessionID string, user
 		)
 	}
 
+	// Reuse the same prompt preparation as summarization so the title model
+	// sees the full conversation context (tool calls, results, etc.).
+	aiMsgs, _ := a.preparePrompt(msgs)
+
+	titleUserPrompt := "Generate a concise title for this conversation.\n\n<think>\n\n</think>"
+	if len(msgs) == 0 {
+		titleUserPrompt = fmt.Sprintf("Generate a concise title for the following message:\n\n%s\n\n<think>\n\n</think>", truncateString(userPrompt, 500))
+		aiMsgs = nil
+	}
+
 	streamCall := fantasy.AgentStreamCall{
-		Prompt: fmt.Sprintf("Generate a concise title for the following content:\n\n%s\n <think>\n\n</think>", userPrompt),
+		Prompt:   titleUserPrompt,
+		Messages: aiMsgs,
 		PrepareStep: func(callCtx context.Context, opts fantasy.PrepareStepFunctionOptions) (_ context.Context, prepared fantasy.PrepareStepResult, err error) {
 			prepared.Messages = opts.Messages
 			if systemPromptPrefix != "" {
@@ -918,6 +1124,16 @@ func (a *sessionAgent) generateTitle(ctx context.Context, sessionID string, user
 	}
 }
 
+// truncateString returns s truncated to maxLen runes with "..." appended if
+// it was longer.
+func truncateString(s string, maxLen int) string {
+	runes := []rune(s)
+	if len(runes) <= maxLen {
+		return s
+	}
+	return string(runes[:maxLen]) + "..."
+}
+
 func (a *sessionAgent) openrouterCost(metadata fantasy.ProviderMetadata) *float64 {
 	openrouterMetadata, ok := metadata[openrouter.Name]
 	if !ok {
@@ -960,12 +1176,6 @@ func (a *sessionAgent) Cancel(sessionID string) {
 		cancel()
 	}
 
-	// Also check for summarize requests.
-	if cancel, ok := a.activeRequests.Get(sessionID + "-summarize"); ok && cancel != nil {
-		slog.Debug("Summarize cancellation initiated", "session_id", sessionID)
-		cancel()
-	}
-
 	if a.QueuedPrompts(sessionID) > 0 {
 		slog.Debug("Clearing queued prompts", "session_id", sessionID)
 		a.messageQueue.Del(sessionID)
@@ -988,12 +1198,13 @@ func (a *sessionAgent) CancelAll() {
 	}
 
 	timeout := time.After(5 * time.Second)
+	ticker := time.NewTicker(200 * time.Millisecond)
+	defer ticker.Stop()
 	for a.IsBusy() {
 		select {
 		case <-timeout:
 			return
-		default:
-			time.Sleep(200 * time.Millisecond)
+		case <-ticker.C:
 		}
 	}
 }
@@ -1082,6 +1293,49 @@ func (a *sessionAgent) convertToToolResult(result fantasy.ToolResultContent) mes
 	}
 
 	return baseResult
+}
+
+// planModeReadOnlyTools is the set of tools allowed during plan mode.
+var planModeReadOnlyTools = []string{
+	"view", "glob", "grep", "ls", "diff", "fetch", "agentic_fetch",
+	"web_search", "sourcegraph", "agent", "memory_search",
+	"list_mcp_resources", "read_mcp_resource",
+	"lsp_diagnostics", "lsp_references",
+	"ask_user", "todos", "job_output",
+	tools.PlanModeToolName,
+}
+
+// detectPlanMode scans existing session messages to determine if plan mode
+// is currently active. It iterates in reverse to find the most recent
+// plan_mode tool result.
+func detectPlanMode(msgs []message.Message) bool {
+	for i := len(msgs) - 1; i >= 0; i-- {
+		for _, tr := range msgs[i].ToolResults() {
+			if tr.Name != tools.PlanModeToolName || tr.Metadata == "" {
+				continue
+			}
+			var meta tools.PlanModeResponseMetadata
+			if err := json.Unmarshal([]byte(tr.Metadata), &meta); err != nil {
+				continue
+			}
+			return meta.PlanActive
+		}
+	}
+	return false
+}
+
+// updatePlanModeFromResult checks if a tool result is from the plan_mode tool
+// and returns the new plan mode state. The second return value indicates
+// whether the state was updated.
+func updatePlanModeFromResult(result fantasy.ToolResultContent) (bool, bool) {
+	if result.ToolName != tools.PlanModeToolName || result.ClientMetadata == "" {
+		return false, false
+	}
+	var meta tools.PlanModeResponseMetadata
+	if err := json.Unmarshal([]byte(result.ClientMetadata), &meta); err != nil {
+		return false, false
+	}
+	return meta.PlanActive, true
 }
 
 // workaroundProviderMediaLimitations converts media content in tool results to
@@ -1173,10 +1427,42 @@ func (a *sessionAgent) workaroundProviderMediaLimitations(messages []fantasy.Mes
 	return convertedMessages
 }
 
+// truncateLargeToolResults is a safety net that truncates oversized tool
+// result text before it is sent to the LLM. This runs in PrepareStep so it
+// only affects what the LLM sees — the original data in the DB is untouched.
+func truncateLargeToolResults(messages []fantasy.Message) []fantasy.Message {
+	for i, msg := range messages {
+		if msg.Role != fantasy.MessageRoleTool {
+			continue
+		}
+		for j, part := range msg.Content {
+			tr, ok := fantasy.AsMessagePart[fantasy.ToolResultPart](part)
+			if !ok {
+				continue
+			}
+			text, ok := fantasy.AsToolResultOutputType[fantasy.ToolResultOutputContentText](tr.Output)
+			if !ok || len(text.Text) <= maxToolResultSize {
+				continue
+			}
+			tr.Output = fantasy.ToolResultOutputContentText{
+				Text: tools.TruncateString(text.Text, maxToolResultSize),
+			}
+			messages[i].Content[j] = tr
+		}
+	}
+	return messages
+}
+
 // buildSummaryPrompt constructs the prompt text for session summarization.
-func buildSummaryPrompt(todos []session.Todo) string {
+func buildSummaryPrompt(dataDir string, sessionID string, todos []session.Todo) string {
 	var sb strings.Builder
 	sb.WriteString("Provide a detailed summary of our conversation above.")
+
+	transcriptPath := TranscriptPath(dataDir, sessionID)
+	sb.WriteString("\n\n## Session Transcript\n\n")
+	sb.WriteString(fmt.Sprintf("The full conversation transcript has been saved to: `%s`\n", transcriptPath))
+	sb.WriteString("The resuming assistant can use the `memory_search` tool to search this transcript for specific details from the conversation.\n")
+
 	if len(todos) > 0 {
 		sb.WriteString("\n\n## Current Todo List\n\n")
 		for _, t := range todos {
@@ -1186,4 +1472,170 @@ func buildSummaryPrompt(todos []session.Todo) string {
 		sb.WriteString("Instruct the resuming assistant to use the `todos` tool to continue tracking progress on these tasks.")
 	}
 	return sb.String()
+}
+
+// serializeTranscript converts a slice of messages to a searchable markdown
+// transcript format.
+func serializeTranscript(msgs []message.Message) string {
+	var sb strings.Builder
+	sb.WriteString("# Session Transcript\n\n")
+
+	for _, msg := range msgs {
+		roleHeader := "Message"
+		switch msg.Role {
+		case message.User:
+			roleHeader = "User"
+		case message.Assistant:
+			roleHeader = "Assistant"
+		case message.Tool:
+			roleHeader = "Tool Results"
+		}
+		sb.WriteString(fmt.Sprintf("## %s\n\n", roleHeader))
+
+		switch msg.Role {
+		case message.User:
+			if text := msg.Content().Text; text != "" {
+				sb.WriteString("### Content\n\n")
+				sb.WriteString(text)
+				sb.WriteString("\n\n")
+			}
+			for _, part := range msg.Parts {
+				if bc, ok := part.(message.BinaryContent); ok {
+					sb.WriteString(fmt.Sprintf("- %s (%s)\n", bc.Path, bc.MIMEType))
+				}
+			}
+
+		case message.Assistant:
+			if msg.Model != "" {
+				sb.WriteString(fmt.Sprintf("**Model:** %s (%s)\n", msg.Model, msg.Provider))
+			}
+			sb.WriteString("\n")
+
+			if reasoning := msg.ReasoningContent(); reasoning.Thinking != "" {
+				sb.WriteString("### Reasoning\n\n")
+				sb.WriteString("<thinking>\n")
+				sb.WriteString(reasoning.Thinking)
+				sb.WriteString("\n</thinking>\n\n")
+			}
+
+			if text := msg.Content().Text; text != "" {
+				sb.WriteString("### Response\n\n")
+				sb.WriteString(text)
+				sb.WriteString("\n\n")
+			}
+
+			toolCalls := msg.ToolCalls()
+			if len(toolCalls) > 0 {
+				sb.WriteString("### Tool Calls\n\n")
+				for _, tc := range toolCalls {
+					sb.WriteString("#### Tool Call\n\n")
+					sb.WriteString(fmt.Sprintf("**Tool:** `%s`\n\n", tc.Name))
+					sb.WriteString("**Input:**\n\n")
+					sb.WriteString("```json\n")
+					sb.WriteString(tc.Input)
+					sb.WriteString("\n```\n\n")
+				}
+			}
+
+		case message.Tool:
+			for _, tr := range msg.ToolResults() {
+				sb.WriteString("#### Tool Result\n\n")
+				sb.WriteString(fmt.Sprintf("**Tool:** `%s`\n", tr.Name))
+				if tr.IsError {
+					sb.WriteString("**Status:** Error\n")
+				} else {
+					sb.WriteString("**Status:** Success\n")
+				}
+				content := tr.Content
+				const maxToolResultLen = 10000
+				if len(content) > maxToolResultLen {
+					trunc := maxToolResultLen
+					for trunc > 0 && !utf8.RuneStart(content[trunc]) {
+						trunc--
+					}
+					content = content[:trunc] + "\n... (truncated)"
+					sb.WriteString("**Output:** (truncated)\n\n")
+				} else {
+					sb.WriteString("**Output:**\n\n")
+				}
+				sb.WriteString("```\n")
+				sb.WriteString(content)
+				sb.WriteString("\n```\n\n")
+			}
+		}
+
+		sb.WriteString("---\n\n")
+	}
+
+	return sb.String()
+}
+
+// saveTranscript serializes messages to a markdown file for later search.
+func (a *sessionAgent) saveTranscript(ctx context.Context, sessionID string) error {
+	if a.dataDir == "" {
+		return nil
+	}
+	msgs, err := a.messages.List(ctx, sessionID)
+	if err != nil {
+		return fmt.Errorf("failed to list messages: %w", err)
+	}
+	transcriptsDir := filepath.Join(a.dataDir, "transcripts")
+	if err := os.MkdirAll(transcriptsDir, 0o755); err != nil {
+		return fmt.Errorf("failed to create transcripts directory: %w", err)
+	}
+
+	transcriptPath := filepath.Join(transcriptsDir, sessionID+".md")
+	transcript := serializeTranscript(msgs)
+	if err := os.WriteFile(transcriptPath, []byte(transcript), 0o644); err != nil {
+		return fmt.Errorf("failed to write transcript: %w", err)
+	}
+
+	slog.Debug("saved transcript", "path", transcriptPath, "messages", len(msgs))
+	return nil
+}
+
+// TranscriptPath returns the path where a session's transcript would be saved.
+func TranscriptPath(dataDir string, sessionID string) string {
+	return filepath.Join(dataDir, "transcripts", sessionID+".md")
+}
+
+var keyFactsRegex = regexp.MustCompile(`(?s)<key_facts>(.*?)</key_facts>`)
+
+// extractAndSaveKeyFacts parses key facts from summary text and saves to a file.
+func (a *sessionAgent) extractAndSaveKeyFacts(sessionID string, summaryText string) error {
+	if a.dataDir == "" {
+		return nil
+	}
+	matches := keyFactsRegex.FindStringSubmatch(summaryText)
+	if len(matches) < 2 {
+		return nil
+	}
+
+	facts := strings.TrimSpace(matches[1])
+	if facts == "" {
+		return nil
+	}
+
+	factsDir := filepath.Join(a.dataDir, "transcripts")
+	if err := os.MkdirAll(factsDir, 0o755); err != nil {
+		return fmt.Errorf("failed to create transcripts directory: %w", err)
+	}
+
+	factsPath := filepath.Join(factsDir, sessionID+".facts")
+	if err := os.WriteFile(factsPath, []byte(facts), 0o644); err != nil {
+		return fmt.Errorf("failed to write key facts: %w", err)
+	}
+
+	slog.Debug("saved key facts", "path", factsPath)
+	return nil
+}
+
+// loadKeyFacts loads key facts for a session if they exist.
+func loadKeyFacts(dataDir string, sessionID string) string {
+	factsPath := filepath.Join(dataDir, "transcripts", sessionID+".facts")
+	data, err := os.ReadFile(factsPath)
+	if err != nil {
+		return ""
+	}
+	return strings.TrimSpace(string(data))
 }

@@ -207,13 +207,25 @@ func (s *service) Save(ctx context.Context, session Session) (Session, error) {
 // UpdateTitleAndUsage updates only the title and usage fields atomically.
 // This is safer than fetching, modifying, and saving the entire session.
 func (s *service) UpdateTitleAndUsage(ctx context.Context, sessionID, title string, promptTokens, completionTokens int64, cost float64) error {
-	return s.q.UpdateSessionTitleAndUsage(ctx, db.UpdateSessionTitleAndUsageParams{
+	err := s.q.UpdateSessionTitleAndUsage(ctx, db.UpdateSessionTitleAndUsageParams{
 		ID:               sessionID,
 		Title:            title,
 		PromptTokens:     promptTokens,
 		CompletionTokens: completionTokens,
 		Cost:             cost,
 	})
+	if err != nil {
+		return err
+	}
+
+	// Publish the updated session so the UI can refresh the title.
+	dbSession, err := s.q.GetSessionByID(ctx, sessionID)
+	if err != nil {
+		slog.Error("Failed to get session after rename", "error", err, "sessionID", sessionID)
+		return nil // Title was saved; log but don't fail.
+	}
+	s.Publish(pubsub.UpdatedEvent, s.fromDBItem(dbSession))
+	return nil
 }
 
 // Rename updates only the title of a session without touching updated_at or
