@@ -152,7 +152,7 @@ const listMessagesBySession = `-- name: ListMessagesBySession :many
 SELECT id, session_id, role, parts, model, created_at, updated_at, finished_at, provider, is_summary_message
 FROM messages
 WHERE session_id = ?
-ORDER BY created_at ASC, rowid ASC
+ORDER BY rowid ASC
 `
 
 func (q *Queries) ListMessagesBySession(ctx context.Context, sessionID string) ([]Message, error) {
@@ -254,7 +254,7 @@ const listRecentMessagesBySession = `-- name: ListRecentMessagesBySession :many
 SELECT id, session_id, role, parts, model, created_at, updated_at, finished_at, provider, is_summary_message
 FROM messages
 WHERE session_id = ?
-ORDER BY created_at DESC, rowid DESC
+ORDER BY rowid DESC
 LIMIT ?
 `
 
@@ -300,20 +300,19 @@ func (q *Queries) ListRecentMessagesBySession(ctx context.Context, arg ListRecen
 const listMessagesBySessionBefore = `-- name: ListMessagesBySessionBefore :many
 SELECT id, session_id, role, parts, model, created_at, updated_at, finished_at, provider, is_summary_message
 FROM messages
-WHERE session_id = ? AND (created_at < ? OR (created_at = ? AND rowid < (SELECT rowid FROM messages WHERE id = ?)))
-ORDER BY created_at DESC, rowid DESC
+WHERE session_id = ? AND rowid < (SELECT rowid FROM messages WHERE id = ?)
+ORDER BY rowid DESC
 LIMIT ?
 `
 
 type ListMessagesBySessionBeforeParams struct {
 	SessionID string `json:"session_id"`
-	CreatedAt int64  `json:"created_at"`
 	ID        string `json:"id"`
 	Limit     int64  `json:"limit"`
 }
 
 func (q *Queries) ListMessagesBySessionBefore(ctx context.Context, arg ListMessagesBySessionBeforeParams) ([]Message, error) {
-	rows, err := q.query(ctx, q.listMessagesBySessionBeforeStmt, listMessagesBySessionBefore, arg.SessionID, arg.CreatedAt, arg.CreatedAt, arg.ID, arg.Limit)
+	rows, err := q.query(ctx, q.listMessagesBySessionBeforeStmt, listMessagesBySessionBefore, arg.SessionID, arg.ID, arg.Limit)
 	if err != nil {
 		return nil, err
 	}

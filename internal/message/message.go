@@ -245,7 +245,6 @@ func (s *service) ListBefore(ctx context.Context, sessionID string, cursor Messa
 	}
 	dbMessages, err := s.q.ListMessagesBySessionBefore(ctx, db.ListMessagesBySessionBeforeParams{
 		SessionID: sessionID,
-		CreatedAt: cursor.CreatedAt,
 		ID:        cursor.ID,
 		Limit:     int64(limit + 1),
 	})
