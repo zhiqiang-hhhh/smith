@@ -24,6 +24,7 @@ type QuestionRequest struct {
 	ToolName   string   `json:"tool_name,omitempty"`
 	Question   string   `json:"question"`
 	Header     string   `json:"header,omitempty"`
+	Body       string   `json:"body,omitempty"`
 	Options    []Option `json:"options,omitempty"`
 	Multi      bool     `json:"multi,omitempty"`
 	AllowText  bool     `json:"allow_text"`

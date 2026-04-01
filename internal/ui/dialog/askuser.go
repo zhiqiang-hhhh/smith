@@ -20,6 +20,8 @@ const (
 	AskUserID              = "ask_user"
 	askUserDialogMaxWidth  = 80
 	askUserDialogMaxHeight = 24
+	askUserBodyMaxWidth    = 120
+	askUserBodyMaxHeight   = 40
 )
 
 // ActionAskUserResponse is sent when the user answers the question.
@@ -331,6 +333,16 @@ func (a *AskUser) Cursor() *tea.Cursor {
 	return cur
 }
 
+// renderBody renders the body content as markdown.
+func (a *AskUser) renderBody(width int) string {
+	renderer := common.MarkdownRenderer(a.com.Styles, width)
+	result, err := renderer.Render(a.request.Body)
+	if err != nil {
+		return a.request.Body
+	}
+	return strings.TrimSuffix(result, "\n")
+}
+
 // contentHeightAboveInput returns the number of lines rendered above the text
 // input in the dialog, including the custom title and separator.
 func (a *AskUser) contentHeightAboveInput(innerWidth int) int {
@@ -339,15 +351,26 @@ func (a *AskUser) contentHeightAboveInput(innerWidth int) int {
 		Width(innerWidth).
 		PaddingBottom(1)
 	question := questionStyle.Render(a.request.Question)
-	return titleAndSeparatorHeight + lipgloss.Height(question)
+	h := titleAndSeparatorHeight + lipgloss.Height(question)
+	if a.request.Body != "" {
+		h += a.vp.Height() + 1
+	}
+	return h
 }
 
 // Draw implements [Dialog].
 func (a *AskUser) Draw(scr uv.Screen, area uv.Rectangle) *tea.Cursor {
 	t := a.com.Styles
 
-	width := max(0, min(askUserDialogMaxWidth, area.Dx()))
-	maxHeight := max(0, min(askUserDialogMaxHeight, area.Dy()-4))
+	hasBody := a.request.Body != ""
+	dialogMaxW := askUserDialogMaxWidth
+	dialogMaxH := askUserDialogMaxHeight
+	if hasBody {
+		dialogMaxW = askUserBodyMaxWidth
+		dialogMaxH = askUserBodyMaxHeight
+	}
+	width := max(0, min(dialogMaxW, area.Dx()))
+	maxHeight := max(0, min(dialogMaxH, area.Dy()-4))
 
 	dialogStyle := a.dialogViewStyle()
 	innerWidth := width - dialogStyle.GetHorizontalFrameSize()
@@ -469,6 +492,48 @@ func (a *AskUser) Draw(scr uv.Screen, area uv.Rectangle) *tea.Cursor {
 	questionStyle := lipgloss.NewStyle().Width(innerWidth).PaddingBottom(1)
 	questionRendered := questionStyle.Render(a.request.Question)
 	questionHeight := lipgloss.Height(questionRendered)
+
+	if hasBody {
+		bodyRendered := a.renderBody(innerWidth - 1)
+		bodyHeight := lipgloss.Height(bodyRendered)
+		availableForBody := max(maxHeight-fixedHeight-questionHeight-1, 3)
+
+		needsScroll := bodyHeight > availableForBody
+		vpWidth := innerWidth
+		if needsScroll {
+			vpWidth = innerWidth - 1
+		}
+
+		var bodyView string
+		a.vp.SetWidth(vpWidth)
+		a.vp.SetHeight(availableForBody)
+		if a.vpDirty || a.vp.Width() != vpWidth {
+			a.vp.SetContent(bodyRendered)
+			a.vpDirty = false
+		}
+		if needsScroll {
+			scrollbar := common.Scrollbar(t, availableForBody, a.vp.TotalLineCount(), availableForBody, a.vp.YOffset())
+			bodyView = lipgloss.JoinHorizontal(lipgloss.Top, a.vp.View(), scrollbar)
+		} else {
+			bodyView = a.vp.View()
+		}
+
+		parts := []string{header, questionRendered, bodyView, ""}
+		if interactiveContent != "" {
+			parts = append(parts, interactiveContent)
+		}
+		parts = append(parts, "", helpView)
+
+		innerContent := lipgloss.JoinVertical(lipgloss.Left, parts...)
+		view := dialogStyle.Render(innerContent)
+		cur := a.Cursor()
+		if cur != nil {
+			cur.Y += a.contentHeightAboveInput(innerWidth)
+		}
+		DrawCenterCursor(scr, area, view, cur)
+		return cur
+	}
+
 	availableForQuestion := max(maxHeight-fixedHeight, 3)
 
 	needsScroll := questionHeight > availableForQuestion

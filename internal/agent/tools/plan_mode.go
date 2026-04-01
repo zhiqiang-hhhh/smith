@@ -76,6 +76,7 @@ func NewPlanModeTool(askSvc askuser.Service) fantasy.AgentTool {
 				ToolName:   PlanModeToolName,
 				Question:   question,
 				Header:     "Plan Mode",
+				Body:       plan,
 				Options:    options,
 				AllowText:  true,
 			}
