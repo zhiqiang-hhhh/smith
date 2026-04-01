@@ -796,6 +796,35 @@ func GlobalConfigData() string {
 	return filepath.Join(home.Dir(), ".local", "share", appName, fmt.Sprintf("%s.json", appName))
 }
 
+// GlobalContextDir returns the global context directory where user-level
+// context files (AGENTS.md, etc.) are loaded from. This allows users to
+// define global instructions that apply across all projects.
+func GlobalContextDir() string {
+	if crushGlobal := os.Getenv("CRUSH_GLOBAL_CONFIG"); crushGlobal != "" {
+		return crushGlobal
+	}
+	if xdgConfigHome := os.Getenv("XDG_CONFIG_HOME"); xdgConfigHome != "" {
+		return filepath.Join(xdgConfigHome, appName)
+	}
+	return filepath.Join(home.Dir(), ".config", appName)
+}
+
+// globalContextFileNames lists the context file names that are recognized in
+// the global config directory. Only plain files (no directories) are
+// supported at the global level.
+var globalContextFileNames = []string{
+	"AGENTS.md",
+	"CLAUDE.md",
+	"CRUSH.md",
+	"crush.md",
+}
+
+// GlobalContextFileNames returns the list of context file names recognized
+// in the global config directory.
+func GlobalContextFileNames() []string {
+	return globalContextFileNames
+}
+
 func assignIfNil[T any](ptr **T, val T) {
 	if *ptr == nil {
 		*ptr = &val

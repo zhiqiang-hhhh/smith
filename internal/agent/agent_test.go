@@ -765,7 +765,7 @@ func BenchmarkBuildSummaryPrompt(b *testing.B) {
 		b.Run(tc.name, func(b *testing.B) {
 			b.ReportAllocs()
 			for range b.N {
-				_ = buildSummaryPrompt("/tmp/test", "test-session-id", todos)
+				_ = buildSummaryPrompt("/tmp/test", "test-session-id", todos, "")
 			}
 		})
 	}

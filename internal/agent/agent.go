@@ -41,6 +41,7 @@ import (
 	"github.com/charmbracelet/crush/internal/agent/tools/mcp"
 	"github.com/charmbracelet/crush/internal/config"
 	"github.com/charmbracelet/crush/internal/csync"
+	"github.com/charmbracelet/crush/internal/filetracker"
 	"github.com/charmbracelet/crush/internal/message"
 	"github.com/charmbracelet/crush/internal/permission"
 	"github.com/charmbracelet/crush/internal/pubsub"
@@ -135,6 +136,7 @@ type sessionAgent struct {
 	isSubAgent           bool
 	sessions             session.Service
 	messages             message.Service
+	fileTracker          filetracker.Service
 	disableAutoSummarize bool
 	autoTitle            bool
 	isYolo               bool
@@ -143,6 +145,7 @@ type sessionAgent struct {
 
 	messageQueue   *csync.Map[string, []SessionAgentCall]
 	activeRequests *csync.Map[string, context.CancelFunc]
+	circuitBreaker *summarizeCircuitBreaker
 }
 
 type SessionAgentOptions struct {
@@ -152,6 +155,7 @@ type SessionAgentOptions struct {
 	SystemPromptPrefix   string
 	SystemPrompt         string
 	IsSubAgent           bool
+	FileTracker          filetracker.Service
 	DisableAutoSummarize bool
 	AutoTitle            bool
 	IsYolo               bool
@@ -174,6 +178,7 @@ func NewSessionAgent(
 		isSubAgent:           opts.IsSubAgent,
 		sessions:             opts.Sessions,
 		messages:             opts.Messages,
+		fileTracker:          opts.FileTracker,
 		disableAutoSummarize: opts.DisableAutoSummarize,
 		autoTitle:            opts.AutoTitle,
 		tools:                csync.NewSliceFrom(opts.Tools),
@@ -182,6 +187,7 @@ func NewSessionAgent(
 		notify:               opts.Notify,
 		messageQueue:         csync.NewMap[string, []SessionAgentCall](),
 		activeRequests:       csync.NewMap[string, context.CancelFunc](),
+		circuitBreaker:       newSummarizeCircuitBreaker(),
 	}
 }
 
@@ -317,6 +323,10 @@ func (a *sessionAgent) Run(ctx context.Context, call SessionAgentCall) (*fantasy
 			}
 
 			prepared.Messages = a.workaroundProviderMediaLimitations(prepared.Messages, largeModel)
+			cw := int64(largeModel.CatwalkCfg.ContextWindow)
+			usedTokens := currentSession.CompletionTokens + currentSession.PromptTokens
+			prepared.Messages = clearToolResultsAfterIdleGap(prepared.Messages, currentSession.UpdatedAt)
+			prepared.Messages = clearOldToolResults(prepared.Messages, cw, usedTokens)
 			prepared.Messages = truncateLargeToolResults(prepared.Messages)
 
 			lastSystemRoleInx := 0
@@ -474,7 +484,7 @@ func (a *sessionAgent) Run(ctx context.Context, call SessionAgentCall) (*fantasy
 				} else {
 					threshold = int64(float64(cw) * smallContextWindowRatio)
 				}
-				if (remaining <= threshold) && !a.disableAutoSummarize {
+				if (remaining <= threshold) && !a.disableAutoSummarize && !a.circuitBreaker.isTripped(call.SessionID) {
 					shouldSummarize = true
 					return true
 				}
@@ -490,7 +500,7 @@ func (a *sessionAgent) Run(ctx context.Context, call SessionAgentCall) (*fantasy
 
 	if err != nil {
 		var contextTooLargeErr *fantasy.ProviderError
-		if errors.As(err, &contextTooLargeErr) && contextTooLargeErr.IsContextTooLarge() && !a.disableAutoSummarize {
+		if errors.As(err, &contextTooLargeErr) && contextTooLargeErr.IsContextTooLarge() && !a.disableAutoSummarize && !a.circuitBreaker.isTripped(call.SessionID) {
 			if call.autoSummarizeDepth >= maxAutoSummarizeDepth {
 				return nil, fmt.Errorf("context too large after %d auto-summarize attempts", maxAutoSummarizeDepth)
 			}
@@ -502,9 +512,11 @@ func (a *sessionAgent) Run(ctx context.Context, call SessionAgentCall) (*fantasy
 			cancel()
 			a.activeRequests.Del(call.SessionID)
 			if summarizeErr := a.Summarize(ctx, call.SessionID, call.ProviderOptions); summarizeErr != nil {
+				a.circuitBreaker.recordFailure(call.SessionID)
 				slog.Error("Auto-summarize after context overflow failed", "error", summarizeErr)
 				return nil, fmt.Errorf("context too large and auto-summarize failed: %w", summarizeErr)
 			}
+			a.circuitBreaker.recordSuccess(call.SessionID)
 			call.Prompt = "The conversation was automatically summarized because the context got too long. The summary above contains the full conversation state including any tool results and user answers. Please continue where you left off."
 			call.autoSummarizeDepth++
 			return a.Run(ctx, call)
@@ -630,8 +642,15 @@ func (a *sessionAgent) Run(ctx context.Context, call SessionAgentCall) (*fantasy
 		} else {
 			a.activeRequests.Del(call.SessionID)
 			if summarizeErr := a.Summarize(ctx, call.SessionID, call.ProviderOptions); summarizeErr != nil {
+				a.circuitBreaker.recordFailure(call.SessionID)
+				slog.Warn("Auto-summarize failed",
+					"session_id", call.SessionID,
+					"error", summarizeErr,
+					"tripped", a.circuitBreaker.isTripped(call.SessionID),
+				)
 				return nil, summarizeErr
 			}
+			a.circuitBreaker.recordSuccess(call.SessionID)
 			// If the agent wasn't done...
 			if len(currentAssistant.ToolCalls()) > 0 {
 				call.Prompt = "The conversation was automatically summarized because the context got too long. The summary above contains the full conversation state including any tool results and user answers. Please continue where you left off."
@@ -691,6 +710,13 @@ func (a *sessionAgent) Summarize(ctx context.Context, sessionID string, opts fan
 
 	aiMsgs, _ := a.preparePrompt(msgs)
 
+	// Microcompact pre-pass: aggressively clear old tool results before
+	// sending to the summary model. This reduces the token cost of the
+	// summarize API call itself. The summary model only needs recent
+	// tool results for context — older ones are already captured in the
+	// conversation flow.
+	aiMsgs = clearToolResultsKeeping(aiMsgs, keepRecentToolResultsAfterIdle)
+
 	agent := fantasy.NewAgent(summaryModel.Model,
 		fantasy.WithSystemPrompt(string(summaryPrompt)),
 		fantasy.WithUserAgent(userAgent),
@@ -705,7 +731,7 @@ func (a *sessionAgent) Summarize(ctx context.Context, sessionID string, opts fan
 		return err
 	}
 
-	summaryPromptText := buildSummaryPrompt(a.dataDir, sessionID, currentSession.Todos)
+	summaryPromptText := buildSummaryPrompt(a.dataDir, sessionID, currentSession.Todos, "")
 
 	resp, err := agent.Stream(genCtx, fantasy.AgentStreamCall{
 		Prompt:          summaryPromptText,
@@ -751,6 +777,11 @@ func (a *sessionAgent) Summarize(ctx context.Context, sessionID string, opts fan
 	}
 
 	summaryMessage.AddFinish(message.FinishReasonEndTurn, "", "")
+
+	// Strip the <analysis> scratchpad block from the summary. The model
+	// uses it as a reasoning step but the content wastes context tokens.
+	summaryMessage.StripTextContent(stripAnalysisBlock)
+
 	err = a.messages.Update(genCtx, summaryMessage)
 	if err != nil {
 		return err
@@ -786,6 +817,11 @@ func (a *sessionAgent) Summarize(ctx context.Context, sessionID string, opts fan
 
 	// Update the session title based on the summarized conversation.
 	go a.generateTitle(ctx, sessionID, msgs, "")
+
+	// Post-summarize cleanup: invalidate caches that hold data from the
+	// now-truncated conversation to prevent stale state.
+	tools.ResetCache()
+	a.circuitBreaker.recordSuccess(sessionID)
 
 	return nil
 }
@@ -854,6 +890,18 @@ If not, please feel free to ignore. Again do not mention this message to the use
 					))
 				}
 			}
+			if len(msgs) > 0 {
+				if recentFiles := loadRecentlyReadFiles(context.Background(), a.fileTracker, msgs[0].SessionID); recentFiles != "" {
+					history = append(history, fantasy.NewUserMessage(recentFiles))
+				}
+			}
+		}
+		if wasInterrupted(msgs) {
+			history = append(history, fantasy.NewUserMessage(
+				fmt.Sprintf("<system_reminder>%s</system_reminder>",
+					`This session was previously interrupted mid-task. The last response was cut short. Continue from where you left off — review the conversation above and resume the task without re-doing completed work.`,
+				),
+			))
 		}
 	}
 	for _, m := range msgs {
@@ -1493,7 +1541,9 @@ func truncateLargeToolResults(messages []fantasy.Message) []fantasy.Message {
 }
 
 // buildSummaryPrompt constructs the prompt text for session summarization.
-func buildSummaryPrompt(dataDir string, sessionID string, todos []session.Todo) string {
+// If customInstructions is non-empty, it's appended to guide what the
+// summary should focus on or preserve.
+func buildSummaryPrompt(dataDir string, sessionID string, todos []session.Todo, customInstructions string) string {
 	var sb strings.Builder
 	sb.WriteString("Provide a detailed summary of our conversation above.")
 
@@ -1510,6 +1560,13 @@ func buildSummaryPrompt(dataDir string, sessionID string, todos []session.Todo) 
 		sb.WriteString("\nInclude these tasks and their statuses in your summary. ")
 		sb.WriteString("Instruct the resuming assistant to use the `todos` tool to continue tracking progress on these tasks.")
 	}
+
+	if customInstructions != "" {
+		sb.WriteString("\n\n## Custom Instructions\n\n")
+		sb.WriteString("The user has provided the following instructions for this summary. Follow them carefully:\n\n")
+		sb.WriteString(customInstructions)
+	}
+
 	return sb.String()
 }
 
@@ -1643,6 +1700,18 @@ func KeyFactsPath(dataDir string, sessionID string) string {
 }
 
 var keyFactsRegex = regexp.MustCompile(`(?s)<key_facts>(.*?)</key_facts>`)
+
+// analysisBlockRegex matches the <analysis>...</analysis> scratchpad block
+// that the summary prompt asks the model to use as a reasoning step.
+var analysisBlockRegex = regexp.MustCompile(`(?s)<analysis>.*?</analysis>\s*`)
+
+// stripAnalysisBlock removes the <analysis> scratchpad block from summary
+// text. The summary template instructs the model to think in <analysis> tags
+// before writing the actual summary — this improves quality but the analysis
+// itself has no value in the stored result and wastes context tokens.
+func stripAnalysisBlock(text string) string {
+	return analysisBlockRegex.ReplaceAllString(text, "")
+}
 
 // extractAndSaveKeyFacts parses key facts from summary text and saves to a file.
 func (a *sessionAgent) extractAndSaveKeyFacts(sessionID string, summaryText string) error {

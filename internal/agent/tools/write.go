@@ -62,6 +62,10 @@ func NewWriteTool(
 				return fantasy.NewTextErrorResponse("content is required"), nil
 			}
 
+			if int64(len(params.Content)) > maxEditFileSize {
+				return fantasy.NewTextErrorResponse(fmt.Sprintf("content is too large to write (%d bytes, max %d)", len(params.Content), maxEditFileSize)), nil
+			}
+
 			sessionID := GetSessionFromContext(ctx)
 			if sessionID == "" {
 				return fantasy.ToolResponse{}, fmt.Errorf("session_id is required")
@@ -96,11 +100,17 @@ func NewWriteTool(
 			}
 
 			oldContent := ""
+			isCrlf := false
 			if fileInfo != nil && !fileInfo.IsDir() {
 				oldBytes, readErr := os.ReadFile(filePath)
 				if readErr == nil {
-					oldContent = string(oldBytes)
+					oldContent, isCrlf = fsext.ToUnixLineEndings(string(oldBytes))
 				}
+			}
+
+			writeContent := params.Content
+			if isCrlf {
+				writeContent, _ = fsext.ToWindowsLineEndings(writeContent)
 			}
 
 			diff, additions, removals := diff.GenerateDiff(
@@ -131,7 +141,7 @@ func NewWriteTool(
 				return fantasy.ToolResponse{}, permission.ErrorPermissionDenied
 			}
 
-			err = os.WriteFile(filePath, []byte(params.Content), 0o644)
+			err = os.WriteFile(filePath, []byte(writeContent), 0o644)
 			if err != nil {
 				return fantasy.NewTextErrorResponse(fmt.Sprintf("error writing file: %s", err)), nil
 			}

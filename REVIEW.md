@@ -262,3 +262,246 @@
 | 166 | `tools/edit.go:362-377` | Misleading error when `replaceAll=true` and `oldString` not found | ⏭️ Skipped — minor UX issue |
 | 167 | `coordinator.go:417-433` | Sub-agent readyWg goroutines not awaited after UpdateModels | ⏭️ Skipped — needs deeper investigation of wg lifecycle |
 | 168 | `agent/agent.go:1407-1410` | `workaroundProviderMediaLimitations` drops ProviderOptions on reconstructed tool message | ⏭️ Skipped — cache control not critical for correctness |
+
+---
+
+## TODO — Feature Improvements
+
+### ask_user: Inline Input Instead of Overlay Dialog
+
+**Problem**: The current `ask_user` tool renders a centered overlay dialog
+(`ui/dialog/askuser.go`) that covers the chat content. Users cannot scroll
+the conversation to review context while the question is displayed.
+
+**Desired behavior** (ref: [OpenCode](https://github.com/sst/opencode)):
+- Render the question as a special message item at the bottom of the chat
+  message list, not as an overlay.
+- Repurpose the bottom input area (textarea) as the answer input — support
+  text entry, single-select (↑/↓ + Enter), and multi-select (Space to
+  toggle).
+- The chat area remains fully scrollable so the user can review conversation
+  history to understand the question's context.
+
+**Implementation sketch**:
+1. Remove the `dialog.Overlay` path for ask_user. Keep the
+   `askuser.Service` channel-based blocking pattern unchanged.
+2. Add a new `AskUserMessageItem` in `ui/chat/` that renders the question,
+   options, and keybinding hints inline in the message list.
+3. Switch the bottom input component to an "answer mode" when an ask_user
+   request is active:
+   - Text-only questions → normal textarea, Enter to submit.
+   - Options → list selector with ↑/↓/1-9 navigation, Enter to confirm.
+   - Multi-select → checkboxes with Space to toggle, Enter to confirm all.
+4. Route keyboard events: when answer mode is active, input goes to the
+   answer handler instead of the normal prompt submission path.
+5. On submit, call `askuser.Service.Respond()` as before.
+
+**Files to modify**:
+- `internal/ui/model/ui.go` — replace `openAskUserDialog` with inline
+  rendering + input mode switch.
+- `internal/ui/chat/` — new `askuser.go` message item for inline rendering.
+- `internal/ui/dialog/askuser.go` — can be removed or kept as fallback.
+- `internal/askuser/askuser.go` — no changes needed (service layer is
+  transport-agnostic).
+
+### Auto Mode (AI-Based Permission Classifier)
+
+**Problem**: Currently crush has only two permission modes: manual approval
+(default) and YOLO (approve everything). There is no middle ground where an
+AI classifier decides whether a tool call is safe to auto-approve.
+
+**Desired behavior** (ref: claude-code `yoloClassifier.ts`):
+- A 2-stage LLM classifier that evaluates each tool call:
+  - Stage 1 (fast): max_tokens=64, stop at first decision — immediate
+    allow/deny.
+  - Stage 2 (thinking): max_tokens=4096, chain-of-thought reasoning for
+    ambiguous cases.
+- Fast-paths that skip the classifier entirely: read-only tools,
+  `acceptEdits` mode, safe-command allowlist.
+- User-configurable allow/deny rules via `crush.json` (`autoMode` settings).
+- Fail-closed by default: classifier errors → prompt the user.
+- Consecutive denial tracking: after N denials, fall back to interactive
+  prompting.
+
+**Files to modify**:
+- `internal/permission/permission.go` — add `Auto` permission mode,
+  integrate classifier into `Request` flow.
+- New `internal/permission/classifier.go` — the 2-stage classifier
+  implementation using the small model.
+- `internal/config/config.go` — add `auto_mode` config section with
+  allow/deny rules.
+- `internal/agent/tools/*.go` — add `toClassifierInput()` method per tool
+  for compact transcript projection.
+
+### Advisor (Dual-Model Review)
+
+**What**: The main agent can consult a stronger "advisor" model (e.g.,
+Opus) for strategic guidance. The advisor sees the full conversation and
+returns high-level advice.
+
+**How** (ref: claude-code `utils/advisor.ts`):
+- A separate API call sends the full conversation to a stronger model.
+- The advisor is NOT a tool the model calls — it is invoked by the system
+  at key decision points or on user request (`/advisor`).
+- System prompt instructs the agent to: call advisor BEFORE substantive
+  work, when stuck, when considering approach changes, and when done.
+- Advisor response is injected back into the conversation as context.
+
+**Implementation sketch**:
+- Add `advisor` model config in `crush.json` (model + provider).
+- New `internal/agent/advisor.go` — takes full message history, calls the
+  advisor model with a review prompt, returns advice text.
+- Wire into agent loop: optionally call advisor before first tool use in a
+  new turn, or on explicit `/advisor` command.
+- Show advisor response in a distinct UI element (e.g., collapsible block).
+
+### Doctor (Diagnostic Health Checks)
+
+**What**: A `/doctor` command that runs comprehensive environment and
+configuration health checks.
+
+**Checks to implement**:
+- Provider connectivity (test API key validity).
+- Config file parsing (detect syntax errors, unknown fields).
+- Memory/context file sizes (warn if AGENTS.md > 40k chars).
+- Shell availability (bash/sh interpreter).
+- Ripgrep availability (used by grep/glob tools).
+- Git status (repo detection, branch info).
+- LSP server status (configured vs running).
+- MCP server status (configured vs reachable).
+- Disk space for data directory.
+
+**Files to create**:
+- `internal/cmd/doctor.go` — CLI command.
+- `internal/doctor/doctor.go` — diagnostic checks.
+
+### Security Review (Built-in Skill)
+
+**What**: A built-in skill that performs security review on the current
+branch's changes using `git diff`.
+
+**How** (ref: claude-code `commands/security-review.ts`):
+- Three-phase methodology: repository context → comparative analysis →
+  vulnerability assessment.
+- Categories: input validation, auth/authz, crypto, injection/RCE, data
+  exposure.
+- 17 hard exclusions to minimize false positives (DoS, rate limiting,
+  regex, test files, etc.).
+- Confidence scoring: only report findings > 0.7.
+
+**Implementation**: Ship as a SKILL.md file in the global skills directory
+(`~/.config/crush/skills/security-review/SKILL.md`).
+
+### Hook System (Lifecycle Events)
+
+**What**: User-defined shell commands that run at lifecycle events.
+
+**Events** (ref: claude-code `utils/hooks.ts`):
+- `PreToolUse` — before a tool executes (can block or modify).
+- `PostToolUse` — after a tool completes.
+- `SessionStart` — when a session begins.
+- `UserPromptSubmit` — before a user prompt is sent to the model.
+- `PreCompact` — before summarization.
+- `PostCompact` — after summarization.
+
+**Hook config** (in `crush.json`):
+```json
+{
+  "hooks": {
+    "PreToolUse": [
+      { "command": "lint-check.sh", "if": "Bash(git *)" }
+    ]
+  }
+}
+```
+
+**Hook output protocol**: JSON with `{ continue, decision, systemMessage }`.
+Hooks can block tool execution, inject system messages, or run silently.
+
+**Files to create**:
+- `internal/hooks/hooks.go` — hook discovery, execution, output parsing.
+- Config schema update for `hooks` field.
+
+### Context Analysis Visualization
+
+**What**: Break down context window usage by category so users understand
+where tokens are spent.
+
+**Categories**:
+- System prompt (base template).
+- Memory/context files (per-file breakdown with sizes).
+- Tool definitions (per-tool token cost).
+- MCP tool definitions (per-server).
+- Conversation messages (user vs assistant vs tool results).
+
+**Display**: A `/context` command or status bar breakdown showing percentage
+bars per category. Use rough token estimation (chars / 4) to avoid API
+calls.
+
+**Files to create**:
+- `internal/agent/context_analysis.go` — token counting per category.
+- UI command to display the breakdown.
+
+### Tips (Contextual Hints During API Waits)
+
+**What**: Show helpful tips during spinner/loading time to improve feature
+discoverability.
+
+**How** (ref: claude-code `services/tips/`):
+- ~20-30 tips covering features: plan mode, keyboard shortcuts, worker
+  agents, session resume, memory files, etc.
+- Session-based cooldown: each tip has a `cooldownSessions` count — once
+  shown, it will not appear again for N sessions.
+- Context-aware: `isRelevant()` predicate checks user state (e.g., only
+  show git tips in git repos).
+- Show one tip per API wait, picked from the least-recently-shown relevant
+  tips.
+
+### Example Commands (Contextual Placeholders)
+
+**What**: Generate context-aware placeholder prompts in the input area.
+
+**How** (ref: claude-code `utils/exampleCommands.ts`):
+- Analyze `git log` to find frequently modified files by the current user.
+- Filter out non-core files (lock files, configs, build artifacts).
+- Pick 5 diverse files across different directories.
+- Generate prompts from templates: "fix lint errors in X", "how does X
+  work?", "write tests for X", "refactor X".
+- Cache results in project config, regenerate weekly.
+
+### Commit/PR Workflow Commands
+
+**What**: Built-in `/commit` and `/pr` commands.
+
+**`/commit`**: Gather `git status` + `git diff HEAD`, generate commit
+message following repo's existing style, stage and commit.
+
+**`/pr`**: Extend `/commit` into commit → push → create PR via `gh` CLI.
+Generate PR title, summary, and test plan sections.
+
+These can be implemented as built-in skills rather than hardcoded commands.
+
+### Init Improvement (Multi-Phase Onboarding)
+
+**What**: Improve `crush init` to be more thorough.
+
+**Phases** (ref: claude-code `commands/init.ts`):
+1. Explore codebase via sub-agent (manifests, README, CI, existing
+   configs).
+2. Interview user about preferences (build commands, test commands, style).
+3. Generate AGENTS.md with only information Claude would get wrong without
+   it.
+4. Generate crush.local.md for personal preferences (gitignored).
+5. Suggest optimizations (LSP setup, formatter hooks).
+
+### Rewind (Conversation Checkpoint)
+
+**What**: Select a point in conversation history to rewind to, optionally
+restoring file state.
+
+**How**: Open a message selector, pick a checkpoint, truncate messages
+after that point. If file history tracking is enabled, restore files to
+their state at that checkpoint.
+
+**Prerequisite**: File history/checkpoint system (tracking file content at
+each edit for undo capability).

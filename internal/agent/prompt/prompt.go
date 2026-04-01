@@ -172,15 +172,30 @@ func (p *Prompt) promptData(ctx context.Context, provider, model string, store *
 
 	files := map[string][]ContextFile{}
 
-	cfg := store.Config()
-	for _, pth := range cfg.Options.ContextPaths {
-		expanded := expandPath(pth, store)
-		pathKey := strings.ToLower(expanded)
+	// Load global context files first (lowest priority). These come from
+	// ~/.config/crush/ (or XDG/env overrides). Project-level files with
+	// the same base name will override these via the dedup map.
+	globalDir := config.GlobalContextDir()
+	for _, name := range config.GlobalContextFileNames() {
+		fullPath := filepath.Join(globalDir, name)
+		pathKey := strings.ToLower(name)
 		if _, ok := files[pathKey]; ok {
 			continue
 		}
+		if result := processFile(fullPath); result != nil {
+			files[pathKey] = []ContextFile{*result}
+		}
+	}
+
+	// Load project-level context paths (higher priority, overwrites global).
+	cfg := store.Config()
+	for _, pth := range cfg.Options.ContextPaths {
+		expanded := expandPath(pth, store)
+		pathKey := strings.ToLower(filepath.Base(expanded))
 		content := processContextPath(expanded, store)
-		files[pathKey] = content
+		if len(content) > 0 {
+			files[pathKey] = content
+		}
 	}
 
 	// Discover and load skills metadata.

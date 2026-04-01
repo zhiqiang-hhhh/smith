@@ -75,6 +75,45 @@ func TestRepairUnfinished(t *testing.T) {
 	})
 }
 
+func TestStripTextContent(t *testing.T) {
+	t.Parallel()
+
+	t.Run("transforms text content", func(t *testing.T) {
+		t.Parallel()
+		m := Message{Parts: []ContentPart{
+			TextContent{Text: "hello world"},
+		}}
+		m.StripTextContent(func(s string) string {
+			return strings.ReplaceAll(s, "world", "go")
+		})
+		require.Equal(t, "hello go", m.Content().Text)
+	})
+
+	t.Run("no text content is a noop", func(t *testing.T) {
+		t.Parallel()
+		m := Message{Parts: []ContentPart{
+			ToolCall{ID: "tc1", Name: "bash"},
+		}}
+		m.StripTextContent(func(s string) string {
+			return "replaced"
+		})
+		require.Empty(t, m.Content().Text)
+	})
+
+	t.Run("preserves non-text parts", func(t *testing.T) {
+		t.Parallel()
+		m := Message{Parts: []ContentPart{
+			TextContent{Text: "<remove>x</remove>keep"},
+			ToolCall{ID: "tc1", Name: "bash"},
+		}}
+		m.StripTextContent(func(s string) string {
+			return strings.ReplaceAll(s, "<remove>x</remove>", "")
+		})
+		require.Equal(t, "keep", m.Content().Text)
+		require.Len(t, m.ToolCalls(), 1)
+	})
+}
+
 func BenchmarkPromptWithTextAttachments(b *testing.B) {
 	cases := []struct {
 		name        string

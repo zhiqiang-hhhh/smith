@@ -442,6 +442,7 @@ func (c *coordinator) buildAgent(ctx context.Context, prompt *prompt.Prompt, age
 		SystemPromptPrefix:   largeProviderCfg.SystemPromptPrefix,
 		SystemPrompt:         "",
 		IsSubAgent:           isSubAgent,
+		FileTracker:          c.filetracker,
 		DisableAutoSummarize: c.cfg.Config().Options.DisableAutoSummarize,
 		AutoTitle:            c.cfg.Config().Options.AutoTitle,
 		IsYolo:               c.permissions.SkipRequests(),
@@ -483,6 +484,14 @@ func (c *coordinator) buildTools(ctx context.Context, agent config.Agent) ([]fan
 		allTools = append(allTools, agentTool)
 	}
 
+	if slices.Contains(agent.AllowedTools, WorkerToolName) {
+		workerTool, err := c.workerTool(ctx)
+		if err != nil {
+			return nil, err
+		}
+		allTools = append(allTools, workerTool)
+	}
+
 	if slices.Contains(agent.AllowedTools, tools.AgenticFetchToolName) {
 		agenticFetchTool, err := c.agenticFetchTool(ctx, nil)
 		if err != nil {
@@ -520,7 +529,7 @@ func (c *coordinator) buildTools(ctx context.Context, agent config.Agent) ([]fan
 		tools.NewGlobTool(c.cfg.WorkingDir()),
 		tools.NewGrepTool(c.cfg.WorkingDir(), c.cfg.Config().Tools.Grep),
 		tools.NewLsTool(c.permissions, c.cfg.WorkingDir(), c.cfg.Config().Tools.Ls),
-		tools.NewPlanModeTool(),
+		tools.NewPlanModeTool(c.askuser),
 		tools.NewSourcegraphTool(nil),
 		tools.NewTodosTool(c.sessions),
 		tools.NewViewTool(c.lspManager, c.permissions, c.filetracker, c.cfg.WorkingDir(), c.cfg.Config().Options.SkillsPaths...),

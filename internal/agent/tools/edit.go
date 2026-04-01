@@ -43,6 +43,10 @@ type EditResponseMetadata struct {
 
 const EditToolName = "edit"
 
+// maxEditFileSize is the maximum file size (10 MB) that the edit tool will
+// process to prevent OOM on very large files.
+const maxEditFileSize int64 = 10 * 1024 * 1024
+
 var (
 	oldStringNotFoundErr        = fantasy.NewTextErrorResponse("old_string not found in file. Make sure it matches exactly, including whitespace and line breaks.")
 	oldStringMultipleMatchesErr = fantasy.NewTextErrorResponse("old_string appears multiple times in the file. Please provide more context to ensure a unique match, or set replace_all to true")
@@ -199,6 +203,10 @@ func deleteContent(edit editContext, filePath, oldString string, replaceAll bool
 		return fantasy.NewTextErrorResponse(fmt.Sprintf("path is a directory, not a file: %s", filePath)), nil
 	}
 
+	if fileInfo.Size() > maxEditFileSize {
+		return fantasy.NewTextErrorResponse(fmt.Sprintf("file is too large to edit (%d bytes, max %d)", fileInfo.Size(), maxEditFileSize)), nil
+	}
+
 	sessionID := GetSessionFromContext(edit.ctx)
 	if sessionID == "" {
 		return fantasy.ToolResponse{}, fmt.Errorf("session ID is required for deleting content")
@@ -323,6 +331,10 @@ func replaceContent(edit editContext, filePath, oldString, newString string, rep
 			return fantasy.NewTextErrorResponse(fmt.Sprintf("file not found: %s", filePath)), nil
 		}
 		return fantasy.NewTextErrorResponse(fmt.Sprintf("failed to access file: %s", err)), nil
+	}
+
+	if fileInfo.Size() > maxEditFileSize {
+		return fantasy.NewTextErrorResponse(fmt.Sprintf("file is too large to edit (%d bytes, max %d)", fileInfo.Size(), maxEditFileSize)), nil
 	}
 
 	if fileInfo.IsDir() {

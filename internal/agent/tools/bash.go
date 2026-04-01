@@ -398,35 +398,38 @@ func formatOutput(stdout, stderr string, execErr error) string {
 		errorMessage += fmt.Sprintf("Exit code %d", exitCode)
 	}
 
-	hasBothOutputs := stdout != "" && stderr != ""
-
+	var output string
+	hasBothOutputs := stdout != "" && errorMessage != ""
 	if hasBothOutputs {
-		stdout += "\n"
+		output = "<stdout>\n" + stdout + "\n</stdout>\n<stderr>\n" + errorMessage + "\n</stderr>"
+	} else if stdout != "" {
+		output = stdout
+	} else if errorMessage != "" {
+		output = errorMessage
 	}
 
-	if errorMessage != "" {
-		stdout += "\n" + errorMessage
-	}
-
-	return stdout
+	return output
 }
 
 func truncateOutput(content string) string {
 	return TruncateString(content, MaxOutputLength)
 }
 
-// TruncateString truncates content to maxLen using middle truncation,
+// TruncateString truncates content to maxLen runes using middle truncation,
 // keeping the first and last halves with a truncation notice in between.
+// It operates on rune boundaries to avoid splitting multi-byte UTF-8
+// characters.
 func TruncateString(content string, maxLen int) string {
-	if len(content) <= maxLen {
+	runes := []rune(content)
+	if len(runes) <= maxLen {
 		return content
 	}
 
 	halfLength := maxLen / 2
-	start := content[:halfLength]
-	end := content[len(content)-halfLength:]
+	start := string(runes[:halfLength])
+	end := string(runes[len(runes)-halfLength:])
 
-	truncatedLinesCount := countLines(content[halfLength : len(content)-halfLength])
+	truncatedLinesCount := countLines(string(runes[halfLength : len(runes)-halfLength]))
 	return fmt.Sprintf("%s\n\n... [%d lines truncated] ...\n\n%s", start, truncatedLinesCount, end)
 }
 

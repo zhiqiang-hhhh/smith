@@ -60,8 +60,9 @@ const (
 )
 
 const (
-	AgentCoder string = "coder"
-	AgentTask  string = "task"
+	AgentCoder  string = "coder"
+	AgentTask   string = "task"
+	AgentWorker string = "worker"
 )
 
 type SelectedModel struct {
@@ -476,9 +477,19 @@ func (c *Config) SummaryModel() *catwalk.Model {
 
 const maxRecentModelsPerType = 5
 
+func resolveWorkerTools(tools []string) []string {
+	workerTools := []string{
+		"bash", "diff", "edit", "multiedit", "fetch", "glob", "grep",
+		"job_output", "job_kill", "ls", "sourcegraph", "view", "write",
+		"web_search", "download",
+	}
+	return filterSlice(tools, workerTools, true)
+}
+
 func allToolNames() []string {
 	return []string{
 		"agent",
+		"worker",
 		"ask_user",
 		"bash",
 		"job_output",
@@ -555,6 +566,15 @@ func (c *Config) SetupAgents() {
 			AllowedTools: resolveReadOnlyTools(allowedTools),
 			// NO MCPs or LSPs by default
 			AllowedMCP: map[string][]string{},
+		},
+
+		AgentWorker: {
+			ID:           AgentWorker,
+			Name:         "Worker",
+			Description:  "A worker agent that can read, write, and execute commands to complete implementation tasks independently.",
+			Model:        SelectedModelTypeLarge,
+			ContextPaths: c.Options.ContextPaths,
+			AllowedTools: resolveWorkerTools(allowedTools),
 		},
 	}
 	c.Agents = agents

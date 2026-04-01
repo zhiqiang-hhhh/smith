@@ -242,6 +242,17 @@ func (m *Message) AppendContent(delta string) {
 	}
 }
 
+// StripTextContent applies a transform function to the message's text
+// content. This is used to remove scratchpad blocks (like <analysis>) from
+// summary text before storage.
+func (m *Message) StripTextContent(fn func(string) string) {
+	for i, part := range m.Parts {
+		if c, ok := part.(TextContent); ok {
+			m.Parts[i] = TextContent{Text: fn(c.Text)}
+		}
+	}
+}
+
 func (m *Message) AppendReasoningContent(delta string) {
 	found := false
 	for i, part := range m.Parts {

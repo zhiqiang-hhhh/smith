@@ -155,6 +155,22 @@ func NewViewTool(
 				return fantasy.NewTextErrorResponse(fmt.Sprintf("Path is a directory, not a file: %s", filePath)), nil
 			}
 
+			// Dedup: if the file was previously read in this session and
+			// hasn't been modified since, return a short stub instead of
+			// re-sending the full content. This saves significant tokens
+			// on redundant reads.
+			if !isSkillFile {
+				lastRead := filetracker.LastReadTime(ctx, sessionID, filePath)
+				if !lastRead.IsZero() && !fileInfo.ModTime().After(lastRead) {
+					output := fmt.Sprintf("File %s has not changed since it was last read.", filePath)
+					output += getDiagnostics(filePath, lspManager)
+					return fantasy.WithResponseMetadata(
+						fantasy.NewTextResponse(output),
+						ViewResponseMetadata{FilePath: filePath},
+					), nil
+				}
+			}
+
 			// Based on the specifications we should not limit the skills read.
 			if !isSkillFile && fileInfo.Size() > MaxViewSize {
 				return fantasy.NewTextErrorResponse(fmt.Sprintf("File is too large (%d bytes). Maximum size is %d bytes",
