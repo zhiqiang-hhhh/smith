@@ -304,10 +304,10 @@ func (a *sessionAgent) Run(ctx context.Context, call SessionAgentCall) (*fantasy
 	var currentAssistant *message.Message
 	var shouldSummarize bool
 	var clearContextAfterStep bool
-	planModeActive, exists := a.planMode.Get(call.SessionID)
-	if !exists {
-		planModeActive = detectPlanMode(msgs)
+	if _, exists := a.planMode.Get(call.SessionID); !exists {
+		a.planMode.Set(call.SessionID, detectPlanMode(msgs))
 	}
+	planModeActive, _ := a.planMode.Get(call.SessionID)
 	result, err := agent.Stream(genCtx, fantasy.AgentStreamCall{
 		Prompt:           message.PromptWithTextAttachments(call.Prompt, call.Attachments),
 		Files:            files,
@@ -332,6 +332,9 @@ func (a *sessionAgent) Run(ctx context.Context, call SessionAgentCall) (*fantasy
 			// Filter both ActiveTools (LLM visibility) and Tools
 			// (execution) to prevent write tools from running.
 			// Also inject a system message reinforcing the restriction.
+			// Re-read from the map each step so UI toggles take effect
+			// immediately, even mid-run.
+			planModeActive, _ = a.planMode.Get(call.SessionID)
 			if planModeActive {
 				prepared.ActiveTools = planModeReadOnlyTools
 				prepared.Tools = slices.DeleteFunc(prepared.Tools, func(t fantasy.AgentTool) bool {
