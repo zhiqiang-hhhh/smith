@@ -68,6 +68,7 @@ func NewJobOutputTool() fantasy.AgentTool {
 						outputParts = append(outputParts, fmt.Sprintf("Exit code %d", exitCode))
 					}
 				}
+				bgManager.Remove(params.ShellID)
 			}
 
 			output := strings.Join(outputParts, "\n")

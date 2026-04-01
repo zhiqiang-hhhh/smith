@@ -16,7 +16,7 @@ const (
 	// MaxBackgroundJobs is the maximum number of concurrent background jobs allowed
 	MaxBackgroundJobs = 50
 	// CompletedJobRetentionMinutes is how long to keep completed jobs before auto-cleanup (8 hours)
-	CompletedJobRetentionMinutes = 8 * 60
+	CompletedJobRetentionMinutes = 30
 )
 
 // syncBuffer is a thread-safe wrapper around bytes.Buffer.
@@ -87,8 +87,14 @@ func GetBackgroundShellManager() *BackgroundShellManager {
 
 // Start creates and starts a new background shell with the given command.
 func (m *BackgroundShellManager) Start(ctx context.Context, workingDir string, blockFuncs []BlockFunc, command string, description string) (*BackgroundShell, error) {
-	// Check job limit
-	if m.shells.Len() >= MaxBackgroundJobs {
+	// Check job limit (only count running shells, not completed ones)
+	running := 0
+	for s := range m.shells.Seq() {
+		if atomic.LoadInt64(&s.completedAt) == 0 {
+			running++
+		}
+	}
+	if running >= MaxBackgroundJobs {
 		return nil, fmt.Errorf("maximum number of background jobs (%d) reached. Please terminate or wait for some jobs to complete", MaxBackgroundJobs)
 	}
 
