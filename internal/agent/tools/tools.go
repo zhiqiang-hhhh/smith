@@ -54,3 +54,5 @@ func GetSupportsImagesFromContext(ctx context.Context) bool {
 func GetModelNameFromContext(ctx context.Context) string {
 	return getContextValue(ctx, ModelNameContextKey, "")
 }
+
+

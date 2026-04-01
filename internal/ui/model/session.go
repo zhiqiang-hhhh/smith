@@ -144,26 +144,32 @@ func (m *UI) prepareSessionMessages(ctx context.Context, sessionID string) ([]ch
 	}
 	msgs := page.Messages
 
-	// Restore plan mode state from the last plan_mode tool result.
+	// Restore plan mode state. Prefer an explicit plan_mode tool result
+	// (most authoritative). If none is found, fall back to the IsPlanMode
+	// field on the most recent message, which captures UI-toggled changes
+	// that don't generate tool results.
 	var planMode bool
+	foundToolResult := false
 	for i := len(msgs) - 1; i >= 0; i-- {
 		if msgs[i].Role != message.Tool {
 			continue
 		}
-		found := false
 		for _, tr := range msgs[i].ToolResults() {
 			if tr.Name == agenttools.PlanModeToolName && tr.Metadata != "" {
 				var meta agenttools.PlanModeResponseMetadata
 				if err := json.Unmarshal([]byte(tr.Metadata), &meta); err == nil {
 					planMode = meta.PlanActive
 				}
-				found = true
+				foundToolResult = true
 				break
 			}
 		}
-		if found {
+		if foundToolResult {
 			break
 		}
+	}
+	if !foundToolResult && len(msgs) > 0 {
+		planMode = msgs[len(msgs)-1].IsPlanMode
 	}
 
 	// Repair any assistant messages that were persisted without a Finish

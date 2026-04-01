@@ -7,6 +7,7 @@ import (
 	"charm.land/bubbles/v2/help"
 	"charm.land/bubbles/v2/key"
 	"charm.land/bubbles/v2/textinput"
+	"charm.land/bubbles/v2/viewport"
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
 	"github.com/charmbracelet/crush/internal/askuser"
@@ -33,6 +34,8 @@ type AskUser struct {
 	request askuser.QuestionRequest
 	help    help.Model
 	input   textinput.Model
+	vp      viewport.Model
+	vpDirty bool
 
 	selectedOption int
 	selected       map[int]bool // for multi-select
@@ -50,6 +53,8 @@ type askUserKeyMap struct {
 	Toggle      key.Binding
 	CustomInput key.Binding
 	Back        key.Binding
+	ScrollUp    key.Binding
+	ScrollDown  key.Binding
 }
 
 var _ Dialog = (*AskUser)(nil)
@@ -115,7 +120,30 @@ func NewAskUser(com *common.Common, req askuser.QuestionRequest) *AskUser {
 				key.WithKeys("esc"),
 				key.WithHelp("esc", "back to options"),
 			),
+			ScrollUp: key.NewBinding(
+				key.WithKeys("shift+up", "shift+k"),
+				key.WithHelp("shift+↑", "scroll up"),
+			),
+			ScrollDown: key.NewBinding(
+				key.WithKeys("shift+down", "shift+j"),
+				key.WithHelp("shift+↓", "scroll down"),
+			),
 		},
+		vpDirty: true,
+		vp: func() viewport.Model {
+			vp := viewport.New()
+			vp.KeyMap = viewport.KeyMap{
+				Up:           key.NewBinding(key.WithKeys("shift+up", "shift+k")),
+				Down:         key.NewBinding(key.WithKeys("shift+down", "shift+j")),
+				Left:         key.NewBinding(key.WithDisabled()),
+				Right:        key.NewBinding(key.WithDisabled()),
+				PageUp:       key.NewBinding(key.WithDisabled()),
+				PageDown:     key.NewBinding(key.WithDisabled()),
+				HalfPageUp:   key.NewBinding(key.WithDisabled()),
+				HalfPageDown: key.NewBinding(key.WithDisabled()),
+			}
+			return vp
+		}(),
 	}
 }
 
@@ -128,6 +156,10 @@ func (*AskUser) ID() string {
 func (a *AskUser) HandleMsg(msg tea.Msg) Action {
 	switch msg := msg.(type) {
 	case tea.KeyPressMsg:
+		if key.Matches(msg, a.keyMap.ScrollUp) || key.Matches(msg, a.keyMap.ScrollDown) {
+			a.vp, _ = a.vp.Update(msg)
+			return nil
+		}
 		if a.textMode && len(a.request.Options) > 0 {
 			return a.handleCustomTextMode(msg)
 		}
@@ -138,6 +170,8 @@ func (a *AskUser) HandleMsg(msg tea.Msg) Action {
 			return a.handleMultiSelectMode(msg)
 		}
 		return a.handleSingleSelectMode(msg)
+	case tea.MouseWheelMsg:
+		a.vp, _ = a.vp.Update(msg)
 	}
 	return nil
 }
@@ -313,13 +347,10 @@ func (a *AskUser) Draw(scr uv.Screen, area uv.Rectangle) *tea.Cursor {
 	t := a.com.Styles
 
 	width := max(0, min(askUserDialogMaxWidth, area.Dx()))
-	height := max(0, min(askUserDialogMaxHeight, area.Dy()))
-	_ = height
+	maxHeight := max(0, min(askUserDialogMaxHeight, area.Dy()-4))
 
-	rc := NewRenderContext(t, width)
-	rc.ViewStyle = a.dialogViewStyle()
-
-	innerWidth := width - rc.ViewStyle.GetHorizontalFrameSize()
+	dialogStyle := a.dialogViewStyle()
+	innerWidth := width - dialogStyle.GetHorizontalFrameSize()
 
 	title := "Agent Question"
 	if a.request.Header != "" {
@@ -336,24 +367,22 @@ func (a *AskUser) Draw(scr uv.Screen, area uv.Rectangle) *tea.Cursor {
 		Width(innerWidth).
 		AlignHorizontal(lipgloss.Center).
 		Render(strings.Repeat("─", innerWidth))
-	rc.AddPart(titleLine + "\n" + separator)
+	header := titleLine + "\n" + separator
 
-	questionStyle := lipgloss.NewStyle().
-		Width(innerWidth).
-		PaddingBottom(1)
-	rc.AddPart(questionStyle.Render(a.request.Question))
+	// Build the interactive section (options, text input) — kept outside the viewport.
+	var interactiveParts []string
 
 	if a.textMode {
 		a.input.SetWidth(innerWidth - t.Dialog.InputPrompt.GetHorizontalFrameSize() - 1)
 		inputView := t.Dialog.InputPrompt.Render(a.input.View())
-		rc.AddPart(inputView)
+		interactiveParts = append(interactiveParts, inputView)
 
 		if len(a.request.Options) > 0 {
 			hintStyle := lipgloss.NewStyle().
 				Foreground(t.FgSubtle).
 				Padding(0, 1).
 				Width(innerWidth)
-			rc.AddPart(hintStyle.Render("Press Esc to go back to options"))
+			interactiveParts = append(interactiveParts, hintStyle.Render("Press Esc to go back to options"))
 		}
 	} else if len(a.request.Options) > 0 {
 		accent := charmtone.Yam
@@ -414,21 +443,62 @@ func (a *AskUser) Draw(scr uv.Screen, area uv.Rectangle) *tea.Cursor {
 
 			optParts = append(optParts, line)
 		}
-		rc.AddPart(strings.Join(optParts, "\n"))
+		interactiveParts = append(interactiveParts, strings.Join(optParts, "\n"))
 
 		if a.request.AllowText {
 			hintStyle := lipgloss.NewStyle().
 				Foreground(t.FgSubtle).
 				Padding(0, 1).
 				Width(innerWidth)
-			rc.AddPart(hintStyle.Render("Press t to type a custom answer"))
+			interactiveParts = append(interactiveParts, hintStyle.Render("Press t to type a custom answer"))
 		}
 	}
 
 	a.help.SetWidth(innerWidth)
-	rc.Help = a.help.View(a)
+	helpView := a.help.View(a)
 
-	view := rc.Render()
+	interactiveContent := strings.Join(interactiveParts, "\n")
+
+	// Calculate how much space the question viewport gets.
+	headerHeight := lipgloss.Height(header)
+	interactiveHeight := lipgloss.Height(interactiveContent)
+	helpHeight := lipgloss.Height(helpView)
+	frameHeight := dialogStyle.GetVerticalFrameSize() + 1 // +1 for blank line before help
+	fixedHeight := headerHeight + interactiveHeight + helpHeight + frameHeight
+
+	questionStyle := lipgloss.NewStyle().Width(innerWidth).PaddingBottom(1)
+	questionRendered := questionStyle.Render(a.request.Question)
+	questionHeight := lipgloss.Height(questionRendered)
+	availableForQuestion := max(maxHeight-fixedHeight, 3)
+
+	needsScroll := questionHeight > availableForQuestion
+	vpWidth := innerWidth
+	if needsScroll {
+		vpWidth = innerWidth - 1
+	}
+
+	var questionView string
+	if needsScroll {
+		a.vp.SetWidth(vpWidth)
+		a.vp.SetHeight(availableForQuestion)
+		if a.vpDirty || a.vp.Width() != vpWidth {
+			a.vp.SetContent(questionRendered)
+			a.vpDirty = false
+		}
+		scrollbar := common.Scrollbar(t, availableForQuestion, a.vp.TotalLineCount(), availableForQuestion, a.vp.YOffset())
+		questionView = lipgloss.JoinHorizontal(lipgloss.Top, a.vp.View(), scrollbar)
+	} else {
+		questionView = questionRendered
+	}
+
+	parts := []string{header, questionView}
+	if interactiveContent != "" {
+		parts = append(parts, interactiveContent)
+	}
+	parts = append(parts, "", helpView)
+
+	innerContent := lipgloss.JoinVertical(lipgloss.Left, parts...)
+	view := dialogStyle.Render(innerContent)
 	cur := a.Cursor()
 	if cur != nil {
 		cur.Y += a.contentHeightAboveInput(innerWidth)

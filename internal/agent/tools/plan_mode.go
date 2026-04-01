@@ -17,16 +17,17 @@ var planModeDescription []byte
 
 type PlanModeParams struct {
 	Mode string `json:"mode" description:"Either 'plan' to enter plan mode or 'implement' to exit plan mode" enum:"plan,implement"`
-	Plan string `json:"plan,omitempty" description:"When exiting plan mode, the finalized plan that was approved"`
+	Plan string `json:"plan,omitempty" description:"When exiting plan mode, include the finalized plan for user approval"`
 }
 
 type PlanModeResponseMetadata struct {
-	Mode       string `json:"mode"`
-	PlanActive bool   `json:"plan_active"`
-	Plan       string `json:"plan,omitempty"`
+	Mode         string `json:"mode"`
+	PlanActive   bool   `json:"plan_active"`
+	Plan         string `json:"plan,omitempty"`
+	ClearContext bool   `json:"clear_context,omitempty"`
 }
 
-func NewPlanModeTool(svc askuser.Service) fantasy.AgentTool {
+func NewPlanModeTool(askSvc askuser.Service) fantasy.AgentTool {
 	return fantasy.NewAgentTool(
 		PlanModeToolName,
 		string(planModeDescription),
@@ -43,47 +44,83 @@ func NewPlanModeTool(svc askuser.Service) fantasy.AgentTool {
 			if mode == "plan" {
 				metadata.PlanActive = true
 				return fantasy.WithResponseMetadata(
-					fantasy.NewTextResponse("Plan mode activated. Use ONLY read-only tools (view, glob, grep, ls, agent, sourcegraph, web_search, fetch, diff) to explore the codebase and formulate your plan. Present the plan to the user before switching to implement mode."),
+					fantasy.NewTextResponse("Plan mode activated. You MUST NOT make any edits or run non-readonly tools. Focus on exploring the codebase, designing a plan, and presenting it for approval."),
 					metadata,
 				), nil
 			}
 
-			// mode == "implement": ask user for confirmation before proceeding.
+			// mode == "implement": present the plan for user approval.
 			sessionID := GetSessionFromContext(ctx)
+			plan := strings.TrimSpace(params.Plan)
+
+			question := "Exit plan mode and begin implementation?"
+			if plan != "" {
+				question = "Ready to implement this plan?"
+			}
+
+			options := []askuser.Option{
+				{Label: "Approve", Description: "Exit plan mode and start implementing"},
+				{Label: "Approve and clear context", Description: "Clear conversation history and start fresh with the plan"},
+				{Label: "Reject", Description: "Stay in plan mode and revise the plan"},
+			}
+			if plan == "" {
+				options = []askuser.Option{
+					{Label: "Approve", Description: "Exit plan mode"},
+					{Label: "Reject", Description: "Stay in plan mode"},
+				}
+			}
+
 			req := askuser.QuestionRequest{
 				SessionID:  sessionID,
 				ToolCallID: call.ID,
-				Question:   "Exit plan mode and begin implementation?",
+				ToolName:   PlanModeToolName,
+				Question:   question,
 				Header:     "Plan Mode",
-				Options: []askuser.Option{
-					{Label: "Approve", Description: "Exit plan mode and start implementing"},
-					{Label: "Reject", Description: "Stay in plan mode and revise the plan"},
-				},
-				AllowText: false,
+				Options:    options,
+				AllowText:  true,
 			}
 
-			answers, err := svc.Ask(ctx, req)
+			answers, err := askSvc.Ask(ctx, req)
 			if err != nil {
 				return fantasy.NewTextErrorResponse(fmt.Sprintf("Failed to get user confirmation: %s", err)), nil
 			}
 
-			if len(answers) == 0 || strings.EqualFold(answers[0], "Reject") {
+			if len(answers) == 0 {
 				metadata.PlanActive = true
 				metadata.Mode = "plan"
 				return fantasy.WithResponseMetadata(
-					fantasy.NewTextResponse("User rejected exiting plan mode. Stay in plan mode and revise your plan based on user feedback."),
+					fantasy.NewTextResponse("User dismissed the dialog. Stay in plan mode."),
 					metadata,
 				), nil
 			}
 
-			metadata.PlanActive = false
-			metadata.Plan = params.Plan
+			answer := answers[0]
 
-			response := "Implementation mode activated."
-			if params.Plan != "" {
-				response += " Proceeding with the approved plan."
+			if strings.EqualFold(answer, "Reject") {
+				metadata.PlanActive = true
+				metadata.Mode = "plan"
+				response := "User rejected the plan."
+				if len(answers) > 1 {
+					response += fmt.Sprintf(" User feedback: %s", strings.Join(answers[1:], " "))
+				}
+				response += " Stay in plan mode and revise your plan."
+				return fantasy.WithResponseMetadata(
+					fantasy.NewTextResponse(response),
+					metadata,
+				), nil
 			}
-			response += " You may now use all available tools."
+
+			// User approved (either "Approve" or "Approve and clear context").
+			metadata.PlanActive = false
+			metadata.Plan = plan
+			metadata.ClearContext = strings.EqualFold(answer, "Approve and clear context")
+
+			var response string
+			if plan != "" {
+				response = fmt.Sprintf("User has approved your plan. You can now start coding.\n\n## Approved Plan:\n%s", plan)
+			} else {
+				response = "User has approved exiting plan mode. You can now proceed."
+			}
 
 			return fantasy.WithResponseMetadata(
 				fantasy.NewTextResponse(response),

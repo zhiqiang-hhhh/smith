@@ -549,7 +549,10 @@ func (m *UI) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.sessionFiles = msg.files
 		cmds = append(cmds, m.startLSPs(msg.lspFilePaths()))
 
-		m.planMode = msg.planMode
+		m.planMode = msg.planMode || m.planMode
+		if m.hasSession() {
+			m.com.App.AgentCoordinator.SetPlanMode(m.session.ID, m.planMode)
+		}
 		m.lastUserMessageTime = msg.lastUserMsgTime
 		m.renderPills()
 
@@ -1372,6 +1375,7 @@ func (m *UI) handleDialogMsg(msg tea.Msg) tea.Cmd {
 	// Session dialog messages.
 	case dialog.ActionSelectSession:
 		m.dialog.CloseDialog(dialog.SessionsID)
+		m.planMode = false
 		cmds = append(cmds, m.loadSession(msg.Session.ID))
 
 	// Open dialog message.
@@ -1386,6 +1390,12 @@ func (m *UI) handleDialogMsg(msg tea.Msg) tea.Cmd {
 		yolo := !m.com.App.Permissions.SkipRequests()
 		m.com.App.Permissions.SetSkipRequests(yolo)
 		m.setEditorPrompt(yolo)
+		m.dialog.CloseDialog(dialog.CommandsID)
+	case dialog.ActionTogglePlanMode:
+		if m.isAgentBusy() {
+			return util.ReportWarn("Agent is working, please wait...")
+		}
+		m.togglePlanMode()
 		m.dialog.CloseDialog(dialog.CommandsID)
 	case dialog.ActionToggleNotifications:
 		cfg := m.com.Config()
@@ -1884,7 +1894,11 @@ func (m *UI) handleKeyPressMsg(msg tea.KeyPressMsg) tea.Cmd {
 					cmds = append(cmds, cmd)
 				}
 			case key.Matches(msg, m.keyMap.Tab):
-				break
+				if m.isAgentBusy() {
+					cmds = append(cmds, util.ReportWarn("Agent is working, please wait..."))
+					break
+				}
+				m.togglePlanMode()
 			case msg.Keystroke() == "alt+shift+e":
 				if m.isAgentBusy() {
 					cmds = append(cmds, util.ReportWarn("Agent is working, please wait..."))
@@ -2169,7 +2183,12 @@ func (m *UI) Draw(scr uv.Screen, area uv.Rectangle) *tea.Cursor {
 		}
 
 		helpStr := m.com.Styles.Status.Help.Width(innerWidth).Render(m.status.help.View(m.status.helpKm))
-		inner := lipgloss.JoinVertical(lipgloss.Left, landingStr, "", belowLanding, "", helpStr)
+		parts := []string{landingStr, ""}
+		if m.pillsView != "" {
+			parts = append(parts, m.pillsView)
+		}
+		parts = append(parts, belowLanding, "", helpStr)
+		inner := lipgloss.JoinVertical(lipgloss.Left, parts...)
 		combined := lipgloss.NewStyle().Padding(1, landingPad).Width(landingWidth).Render(inner)
 		combinedW := lipgloss.Width(combined)
 		combinedH := lipgloss.Height(combined)
@@ -2180,8 +2199,11 @@ func (m *UI) Draw(scr uv.Screen, area uv.Rectangle) *tea.Cursor {
 		if !m.loadingSession {
 			landingH := lipgloss.Height(landingStr)
 			editorH := lipgloss.Height(belowLanding)
-			// Editor rect accounts for top padding (1) + landing + blank line.
-			editorTop := dialogRect.Min.Y + 1 + landingH + 1
+			pillsH := 0
+			if m.pillsView != "" {
+				pillsH = lipgloss.Height(m.pillsView)
+			}
+			editorTop := dialogRect.Min.Y + 1 + landingH + 1 + pillsH
 			m.landingEditorRect = image.Rect(
 				dialogRect.Min.X+landingPad,
 				editorTop,
@@ -3090,6 +3112,10 @@ func (m *UI) sendMessage(content string, attachments ...message.Attachment) tea.
 		m.setState(uiChat, m.focus)
 	}
 
+	if m.hasSession() {
+		m.com.App.AgentCoordinator.SetPlanMode(m.session.ID, m.planMode)
+	}
+
 	ctx := context.Background()
 	fileReads := slices.Clone(m.sessionFileReads)
 	sessionID := m.session.ID
@@ -3822,7 +3848,28 @@ func (m *UI) updatePlanMode(tr message.ToolResult) {
 		return
 	}
 	m.planMode = meta.PlanActive
+	if m.hasSession() {
+		m.com.App.AgentCoordinator.SetPlanMode(m.session.ID, meta.PlanActive)
+	}
 	m.renderPills()
+
+	if meta.ClearContext {
+		m.chat.ClearMessages()
+	}
+}
+
+// togglePlanMode toggles plan mode on/off from the UI. It updates the
+// coordinator's per-session plan mode state so the agent's PrepareStep
+// picks up the change on the next step.
+func (m *UI) togglePlanMode() {
+	m.planMode = !m.planMode
+	m.renderPills()
+
+	if !m.hasSession() {
+		return
+	}
+
+	m.com.App.AgentCoordinator.SetPlanMode(m.session.ID, m.planMode)
 }
 
 func (m *UI) enableDockerMCP() tea.Msg {

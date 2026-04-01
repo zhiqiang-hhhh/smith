@@ -146,7 +146,7 @@ func (m *UI) togglePillsExpanded() tea.Cmd {
 	if !m.hasSession() {
 		return nil
 	}
-	hasPills := hasIncompleteTodos(m.session.Todos) || m.promptQueue > 0
+	hasPills := hasIncompleteTodos(m.session.Todos) || m.promptQueue > 0 || m.planMode
 	if !hasPills {
 		return nil
 	}
@@ -191,10 +191,10 @@ func (m *UI) switchPillSection(dir int) tea.Cmd {
 
 // pillsAreaHeight calculates the total height needed for the pills area.
 func (m *UI) pillsAreaHeight() int {
-	if !m.hasSession() {
-		return 0
+	var hasIncomplete bool
+	if m.hasSession() {
+		hasIncomplete = hasIncompleteTodos(m.session.Todos)
 	}
-	hasIncomplete := hasIncompleteTodos(m.session.Todos)
 	hasQueue := m.promptQueue > 0
 	hasPills := hasIncomplete || hasQueue || m.planMode
 	if !hasPills {
@@ -215,11 +215,11 @@ func (m *UI) pillsAreaHeight() int {
 // renderPills renders the pills panel and stores it in m.pillsView.
 func (m *UI) renderPills() {
 	m.pillsView = ""
-	if !m.hasSession() {
-		return
-	}
 
 	width := m.layout.pills.Dx()
+	if width <= 0 {
+		width = m.layout.editor.Dx()
+	}
 	if width <= 0 {
 		return
 	}
@@ -227,7 +227,10 @@ func (m *UI) renderPills() {
 	paddingLeft := 3
 	contentWidth := max(width-paddingLeft, 0)
 
-	hasIncomplete := hasIncompleteTodos(m.session.Todos)
+	var hasIncomplete bool
+	if m.hasSession() {
+		hasIncomplete = hasIncompleteTodos(m.session.Todos)
+	}
 	hasQueue := m.promptQueue > 0
 
 	if !hasIncomplete && !hasQueue && !m.planMode {
@@ -245,7 +248,13 @@ func (m *UI) renderPills() {
 
 	var pills []string
 	if m.planMode {
-		pills = append(pills, planModePill(t))
+		planPill := planModePill(t)
+		planHint := lipgloss.JoinHorizontal(lipgloss.Center,
+			planPill, " ",
+			t.Pills.HelpKey.Render("tab"), " ",
+			t.Pills.HelpText.Render("exit"),
+		)
+		pills = append(pills, planHint)
 	}
 	if hasIncomplete {
 		pills = append(pills, todoPill(m.session.Todos, inProgressIcon, todosFocused, m.pillsExpanded, t))

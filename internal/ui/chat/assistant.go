@@ -114,6 +114,10 @@ func (a *AssistantMessageItem) Render(width int) string {
 	// RawRender, so we can just apply the styles directly to each line.
 	focused := a.sty.Chat.Message.AssistantFocused.Render()
 	blurred := a.sty.Chat.Message.AssistantBlurred.Render()
+	if a.message.IsPlanMode {
+		focused = a.sty.Chat.Message.PlanModeFocused.Render()
+		blurred = a.sty.Chat.Message.PlanModeBlurred.Render()
+	}
 	rendered := a.RawRender(width)
 	lines := strings.Split(rendered, "\n")
 	for i, line := range lines {

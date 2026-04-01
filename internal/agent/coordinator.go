@@ -74,6 +74,7 @@ type Coordinator interface {
 	SmallModel() Model
 	SummaryModel() Model
 	UpdateModels(ctx context.Context) error
+	SetPlanMode(sessionID string, active bool)
 }
 
 type coordinator struct {
@@ -1010,6 +1011,10 @@ func (c *coordinator) SmallModel() Model {
 
 func (c *coordinator) SummaryModel() Model {
 	return c.currentAgent.SummaryModel()
+}
+
+func (c *coordinator) SetPlanMode(sessionID string, active bool) {
+	c.currentAgent.SetPlanMode(sessionID, active)
 }
 
 func (c *coordinator) UpdateModels(ctx context.Context) error {

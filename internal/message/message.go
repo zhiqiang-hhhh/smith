@@ -18,6 +18,7 @@ type CreateMessageParams struct {
 	Model            string
 	Provider         string
 	IsSummaryMessage bool
+	IsPlanMode       bool
 }
 
 // MessageCursor identifies a position in the message timeline for keyset
@@ -89,6 +90,10 @@ func (s *service) Create(ctx context.Context, sessionID string, params CreateMes
 	if params.IsSummaryMessage {
 		isSummary = 1
 	}
+	isPlanMode := int64(0)
+	if params.IsPlanMode {
+		isPlanMode = 1
+	}
 	dbMessage, err := s.q.CreateMessage(ctx, db.CreateMessageParams{
 		ID:               uuid.New().String(),
 		SessionID:        sessionID,
@@ -97,6 +102,7 @@ func (s *service) Create(ctx context.Context, sessionID string, params CreateMes
 		Model:            sql.NullString{String: string(params.Model), Valid: true},
 		Provider:         sql.NullString{String: params.Provider, Valid: params.Provider != ""},
 		IsSummaryMessage: isSummary,
+		IsPlanMode:       isPlanMode,
 	})
 	if err != nil {
 		return Message{}, err
@@ -289,6 +295,7 @@ func (s *service) fromDBItem(item db.Message) (Message, error) {
 		CreatedAt:        item.CreatedAt,
 		UpdatedAt:        item.UpdatedAt,
 		IsSummaryMessage: item.IsSummaryMessage != 0,
+		IsPlanMode:       item.IsPlanMode != 0,
 	}, nil
 }
 

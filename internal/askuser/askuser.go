@@ -21,6 +21,7 @@ type QuestionRequest struct {
 	ID         string   `json:"id"`
 	SessionID  string   `json:"session_id"`
 	ToolCallID string   `json:"tool_call_id"`
+	ToolName   string   `json:"tool_name,omitempty"`
 	Question   string   `json:"question"`
 	Header     string   `json:"header,omitempty"`
 	Options    []Option `json:"options,omitempty"`

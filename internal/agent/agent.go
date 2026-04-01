@@ -116,6 +116,8 @@ type SessionAgent interface {
 	Model() Model
 	SmallModel() Model
 	SummaryModel() Model
+	SetPlanMode(sessionID string, active bool)
+	IsPlanMode(sessionID string) bool
 }
 
 type Model struct {
@@ -147,6 +149,7 @@ type sessionAgent struct {
 	messageQueue   *csync.Map[string, []SessionAgentCall]
 	activeRequests *csync.Map[string, context.CancelFunc]
 	circuitBreaker *summarizeCircuitBreaker
+	planMode       *csync.Map[string, bool]
 }
 
 type SessionAgentOptions struct {
@@ -191,6 +194,7 @@ func NewSessionAgent(
 		messageQueue:         csync.NewMap[string, []SessionAgentCall](),
 		activeRequests:       csync.NewMap[string, context.CancelFunc](),
 		circuitBreaker:       newSummarizeCircuitBreaker(),
+		planMode:            csync.NewMap[string, bool](),
 	}
 }
 
@@ -208,6 +212,20 @@ func (a *sessionAgent) Run(ctx context.Context, call SessionAgentCall) (*fantasy
 			return append(existing, call)
 		})
 		return nil, nil
+	}
+
+	// Merge any previously queued messages into the current prompt.
+	if queued, ok := a.messageQueue.Take(call.SessionID); ok && len(queued) > 0 {
+		var merged strings.Builder
+		for _, q := range queued {
+			if q.Prompt != "" {
+				merged.WriteString(q.Prompt)
+				merged.WriteString("\n\n")
+			}
+			call.Attachments = append(call.Attachments, q.Attachments...)
+		}
+		merged.WriteString(call.Prompt)
+		call.Prompt = merged.String()
 	}
 
 	// Copy mutable fields under lock to avoid races with SetTools/SetModels.
@@ -285,7 +303,11 @@ func (a *sessionAgent) Run(ctx context.Context, call SessionAgentCall) (*fantasy
 
 	var currentAssistant *message.Message
 	var shouldSummarize bool
-	planModeActive := detectPlanMode(msgs)
+	var clearContextAfterStep bool
+	planModeActive, exists := a.planMode.Get(call.SessionID)
+	if !exists {
+		planModeActive = detectPlanMode(msgs)
+	}
 	result, err := agent.Stream(genCtx, fantasy.AgentStreamCall{
 		Prompt:           message.PromptWithTextAttachments(call.Prompt, call.Attachments),
 		Files:            files,
@@ -309,11 +331,15 @@ func (a *sessionAgent) Run(ctx context.Context, call SessionAgentCall) (*fantasy
 			// In plan mode, restrict to read-only tools only.
 			// Filter both ActiveTools (LLM visibility) and Tools
 			// (execution) to prevent write tools from running.
+			// Also inject a system message reinforcing the restriction.
 			if planModeActive {
 				prepared.ActiveTools = planModeReadOnlyTools
 				prepared.Tools = slices.DeleteFunc(prepared.Tools, func(t fantasy.AgentTool) bool {
 					return !slices.Contains(planModeReadOnlyTools, t.Info().Name)
 				})
+				prepared.Messages = append([]fantasy.Message{
+					fantasy.NewSystemMessage(planModeSystemPrompt),
+				}, prepared.Messages...)
 			}
 
 			queuedCalls, _ := a.messageQueue.Take(call.SessionID)
@@ -322,6 +348,16 @@ func (a *sessionAgent) Run(ctx context.Context, call SessionAgentCall) (*fantasy
 				if createErr != nil {
 					return callContext, prepared, createErr
 				}
+				// Insert a synthetic assistant message before the queued
+				// user message so the provider does not merge it into
+				// the preceding tool-result user block, which would
+				// cause the LLM to overlook the new instruction.
+				prepared.Messages = append(prepared.Messages,
+					fantasy.Message{
+						Role:    fantasy.MessageRoleAssistant,
+						Content: []fantasy.MessagePart{fantasy.TextPart{Text: "[New user message received]"}},
+					},
+				)
 				prepared.Messages = append(prepared.Messages, userMessage.ToAIMessage()...)
 			}
 
@@ -354,10 +390,11 @@ func (a *sessionAgent) Run(ctx context.Context, call SessionAgentCall) (*fantasy
 
 			var assistantMsg message.Message
 			assistantMsg, err = a.messages.Create(callContext, call.SessionID, message.CreateMessageParams{
-				Role:     message.Assistant,
-				Parts:    []message.ContentPart{},
-				Model:    largeModel.ModelCfg.Model,
-				Provider: largeModel.ModelCfg.Provider,
+				Role:       message.Assistant,
+				Parts:      []message.ContentPart{},
+				Model:      largeModel.ModelCfg.Model,
+				Provider:   largeModel.ModelCfg.Provider,
+				IsPlanMode: planModeActive,
 			})
 			if err != nil {
 				return callContext, prepared, err
@@ -436,14 +473,19 @@ func (a *sessionAgent) Run(ctx context.Context, call SessionAgentCall) (*fantasy
 			return a.messages.Update(ctx, *currentAssistant)
 		},
 		OnToolResult: func(result fantasy.ToolResultContent) error {
-			if active, ok := updatePlanModeFromResult(result); ok {
+			if active, clearCtx, ok := updatePlanModeFromResult(result); ok {
 				planModeActive = active
+				a.planMode.Set(call.SessionID, active)
+				if clearCtx {
+					clearContextAfterStep = true
+				}
 			}
 			toolResult := a.convertToToolResult(result)
 			// Use parent ctx instead of genCtx to ensure the message is created
 			// even if the request is canceled mid-stream
 			_, createMsgErr := a.messages.Create(ctx, currentAssistant.SessionID, message.CreateMessageParams{
-				Role: message.Tool,
+				Role:       message.Tool,
+				IsPlanMode: planModeActive,
 				Parts: []message.ContentPart{
 					toolResult,
 				},
@@ -474,7 +516,10 @@ func (a *sessionAgent) Run(ctx context.Context, call SessionAgentCall) (*fantasy
 				return sessionErr
 			}
 			currentSession = updatedSession
-			return a.messages.Update(genCtx, *currentAssistant)
+			if err := a.messages.Update(genCtx, *currentAssistant); err != nil {
+				return err
+			}
+			return nil
 		},
 		StopWhen: []fantasy.StopCondition{
 			func(_ []fantasy.StepResult) bool {
@@ -666,20 +711,24 @@ func (a *sessionAgent) Run(ctx context.Context, call SessionAgentCall) (*fantasy
 			}
 		}
 	}
-	// Release active request before processing queued messages.
+	// Release active request.
 	a.activeRequests.Del(call.SessionID)
 	cancel()
 
-	queuedMessages, ok := a.messageQueue.Take(call.SessionID)
-	if !ok || len(queuedMessages) == 0 {
-		return result, err
+	if clearContextAfterStep {
+		if delErr := a.messages.DeleteSessionMessages(ctx, call.SessionID); delErr != nil {
+			slog.Error("Failed to delete session messages for context clear", "error", delErr, "session", call.SessionID)
+		}
+		if sess, getErr := a.sessions.Get(ctx, call.SessionID); getErr == nil {
+			sess.PromptTokens = 0
+			sess.CompletionTokens = 0
+			if _, saveErr := a.sessions.Save(ctx, sess); saveErr != nil {
+				slog.Error("Failed to reset session tokens after context clear", "error", saveErr, "session", call.SessionID)
+			}
+		}
 	}
-	// There are queued messages restart the loop.
-	firstQueuedMessage := queuedMessages[0]
-	if len(queuedMessages) > 1 {
-		a.messageQueue.Set(call.SessionID, queuedMessages[1:])
-	}
-	return a.Run(ctx, firstQueuedMessage)
+
+	return result, err
 }
 
 func (a *sessionAgent) Summarize(ctx context.Context, sessionID string, opts fantasy.ProviderOptions) error {
@@ -856,8 +905,9 @@ func (a *sessionAgent) createUserMessage(ctx context.Context, call SessionAgentC
 	}
 	parts = append(parts, attachmentParts...)
 	msg, err := a.messages.Create(ctx, call.SessionID, message.CreateMessageParams{
-		Role:  message.User,
-		Parts: parts,
+		Role:       message.User,
+		Parts:      parts,
+		IsPlanMode: a.IsPlanMode(call.SessionID),
 	})
 	if err != nil {
 		return message.Message{}, fmt.Errorf("failed to create user message: %w", err)
@@ -1298,6 +1348,15 @@ func (a *sessionAgent) IsSessionBusy(sessionID string) bool {
 	return busy
 }
 
+func (a *sessionAgent) SetPlanMode(sessionID string, active bool) {
+	a.planMode.Set(sessionID, active)
+}
+
+func (a *sessionAgent) IsPlanMode(sessionID string) bool {
+	v, _ := a.planMode.Get(sessionID)
+	return v
+}
+
 func (a *sessionAgent) QueuedPrompts(sessionID string) int {
 	l, ok := a.messageQueue.Get(sessionID)
 	if !ok {
@@ -1387,6 +1446,18 @@ func (a *sessionAgent) convertToToolResult(result fantasy.ToolResultContent) mes
 	return baseResult
 }
 
+// planModeSystemPrompt is injected as a system message every turn while plan
+// mode is active, reinforcing the read-only restriction.
+const planModeSystemPrompt = `Plan mode is active. You MUST NOT make any edits, run any non-readonly tools (including edit, multiedit, write, download), or otherwise make any changes to the system. This supersedes any other instructions you have received.
+
+Focus on:
+1. Exploring the codebase with read-only tools to understand the problem
+2. Designing a concrete implementation plan with specific files, changes, and verification steps
+3. Using ask_user if you need to clarify the approach with the user
+4. When ready, call plan_mode with mode="implement" and include your complete plan in the plan parameter
+
+Your plan will be shown to the user for approval before you can begin implementation.`
+
 // planModeReadOnlyTools is the set of tools allowed during plan mode.
 var planModeReadOnlyTools = []string{
 	"view", "glob", "grep", "ls", "diff", "fetch", "agentic_fetch",
@@ -1394,12 +1465,15 @@ var planModeReadOnlyTools = []string{
 	"list_mcp_resources", "read_mcp_resource",
 	"lsp_diagnostics", "lsp_references",
 	"ask_user", "todos", "job_output",
+	"bash", "job_kill", "web_fetch",
 	tools.PlanModeToolName,
 }
 
 // detectPlanMode scans existing session messages to determine if plan mode
-// is currently active. It iterates in reverse to find the most recent
-// plan_mode tool result.
+// is currently active. It first looks for an explicit plan_mode tool result
+// (most authoritative). If none is found, it falls back to the IsPlanMode
+// field on the most recent message, which reflects UI-toggled plan mode
+// changes that don't produce tool results.
 func detectPlanMode(msgs []message.Message) bool {
 	for i := len(msgs) - 1; i >= 0; i-- {
 		for _, tr := range msgs[i].ToolResults() {
@@ -1413,21 +1487,24 @@ func detectPlanMode(msgs []message.Message) bool {
 			return meta.PlanActive
 		}
 	}
+	if len(msgs) > 0 {
+		return msgs[len(msgs)-1].IsPlanMode
+	}
 	return false
 }
 
 // updatePlanModeFromResult checks if a tool result is from the plan_mode tool
 // and returns the new plan mode state. The second return value indicates
 // whether the state was updated.
-func updatePlanModeFromResult(result fantasy.ToolResultContent) (bool, bool) {
+func updatePlanModeFromResult(result fantasy.ToolResultContent) (active bool, clearContext bool, ok bool) {
 	if result.ToolName != tools.PlanModeToolName || result.ClientMetadata == "" {
-		return false, false
+		return false, false, false
 	}
 	var meta tools.PlanModeResponseMetadata
 	if err := json.Unmarshal([]byte(result.ClientMetadata), &meta); err != nil {
-		return false, false
+		return false, false, false
 	}
-	return meta.PlanActive, true
+	return meta.PlanActive, meta.ClearContext, true
 }
 
 // workaroundProviderMediaLimitations converts media content in tool results to
