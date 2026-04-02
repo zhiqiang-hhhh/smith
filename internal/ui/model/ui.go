@@ -145,6 +145,15 @@ type (
 	// restore focus on the main goroutine.
 	copyChatHighlightDoneMsg struct{}
 
+	// mcpToggledMsg is sent after an MCP server has been toggled in a
+	// background goroutine. Config mutation happens on the main goroutine
+	// when this message is received to avoid data races.
+	mcpToggledMsg struct {
+		Name     string
+		Disabled bool
+		Info     string
+	}
+
 	// insertFileCompletionMsg is returned from the insertFileCompletion
 	// Cmd to apply the file read tracking and attachment on the main
 	// goroutine, avoiding a data race on m.sessionFileReads.
@@ -760,7 +769,7 @@ func (m *UI) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.KeyboardEnhancementsMsg:
 		m.keyenh = msg
 		if msg.SupportsKeyDisambiguation() {
-			m.keyMap.Models.SetHelp("ctrl+m", "models")
+			m.keyMap.Models.SetHelp("alt+m", "models")
 			m.keyMap.Editor.Newline.SetHelp("shift+enter", "newline")
 		}
 	case copyChatHighlightMsg:
@@ -770,6 +779,13 @@ func (m *UI) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.focus = uiFocusEditor
 		m.chat.Blur()
 		m.textarea.Focus() //nolint:errcheck // cursor blink cmd not needed here
+	case mcpToggledMsg:
+		store := m.com.Store()
+		if cfg, ok := store.Config().MCP[msg.Name]; ok {
+			cfg.Disabled = msg.Disabled
+			store.Config().MCP[msg.Name] = cfg
+		}
+		cmds = append(cmds, util.ReportInfo(msg.Info))
 	case insertFileCompletionMsg:
 		m.sessionFileReads = append(m.sessionFileReads, msg.AbsPath)
 		m.attachments.Update(msg.Attachment)
@@ -1201,7 +1217,9 @@ func (m *UI) updateSessionMessage(msg message.Message) tea.Cmd {
 	if existingItem != nil {
 		if assistantItem, ok := existingItem.(*chat.AssistantMessageItem); ok {
 			assistantItem.SetMessage(&msg)
-			m.chat.InvalidateItemHeight(msg.ID)
+			if msg.IsFinished() {
+				m.chat.InvalidateItemHeight(msg.ID)
+			}
 		}
 	}
 
@@ -1263,8 +1281,11 @@ func (m *UI) updateSessionMessage(msg message.Message) tea.Cmd {
 func (m *UI) handleChildSessionMessage(event pubsub.Event[message.Message]) tea.Cmd {
 	var cmds []tea.Cmd
 
-	// Only process messages with tool calls or results.
-	if len(event.Payload.ToolCalls()) == 0 && len(event.Payload.ToolResults()) == 0 {
+	// Only process messages with content, tool calls, or results.
+	hasContent := strings.TrimSpace(event.Payload.Content().Text) != ""
+	hasToolCalls := len(event.Payload.ToolCalls()) > 0
+	hasToolResults := len(event.Payload.ToolResults()) > 0
+	if !hasContent && !hasToolCalls && !hasToolResults {
 		return nil
 	}
 
@@ -1294,6 +1315,11 @@ func (m *UI) handleChildSessionMessage(event pubsub.Event[message.Message]) tea.
 
 	// Get existing nested tools.
 	nestedTools := agentItem.NestedTools()
+
+	// Update streaming text from the sub-agent's assistant message.
+	if hasContent {
+		agentItem.SetStreamingText(event.Payload.Content().Text)
+	}
 
 	// Build an index from tool call ID to slice position for O(1) lookups.
 	toolIndex := make(map[string]int, len(nestedTools))
@@ -3970,20 +3996,12 @@ func (m *UI) toggleMCP(name string, disable bool) tea.Cmd {
 			if err := mcp.DisableSingle(store, name); err != nil {
 				return util.ReportError(fmt.Errorf("failed to disable MCP %s: %w", name, err))()
 			}
-			if cfg, ok := store.Config().MCP[name]; ok {
-				cfg.Disabled = true
-				store.Config().MCP[name] = cfg
-			}
 			if err := m.persistMCPDisabled(store, name, true); err != nil {
 				return util.ReportError(err)()
 			}
-			return util.NewInfoMsg(fmt.Sprintf("MCP %s disabled", name))
+			return mcpToggledMsg{Name: name, Disabled: true, Info: fmt.Sprintf("MCP %s disabled", name)}
 		}
 
-		if cfg, ok := store.Config().MCP[name]; ok {
-			cfg.Disabled = false
-			store.Config().MCP[name] = cfg
-		}
 		ctx := context.Background()
 		if err := mcp.InitializeSingle(ctx, name, store); err != nil {
 			return TextPreviewMsg{
@@ -3994,7 +4012,7 @@ func (m *UI) toggleMCP(name string, disable bool) tea.Cmd {
 		if err := m.persistMCPDisabled(store, name, false); err != nil {
 			return util.ReportError(err)()
 		}
-		return util.NewInfoMsg(fmt.Sprintf("MCP %s enabled", name))
+		return mcpToggledMsg{Name: name, Disabled: false, Info: fmt.Sprintf("MCP %s enabled", name)}
 	}
 }
 

@@ -139,7 +139,12 @@ func (l *List) getItemHeight(idx int) int {
 			item = it
 		}
 	}
-	rendered := item.Render(l.width)
+	var rendered string
+	if raw, ok := item.(RawRenderable); ok {
+		rendered = raw.RawRender(l.width)
+	} else {
+		rendered = item.Render(l.width)
+	}
 	rendered = strings.TrimRight(rendered, "\n")
 	var h int
 	if rendered != "" {

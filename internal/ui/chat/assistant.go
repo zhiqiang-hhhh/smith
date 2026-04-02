@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	tea "charm.land/bubbletea/v2"
+	"charm.land/glamour/v2"
 	"charm.land/lipgloss/v2"
 	"github.com/charmbracelet/crush/internal/message"
 	"github.com/charmbracelet/crush/internal/ui/anim"
@@ -33,6 +34,11 @@ type AssistantMessageItem struct {
 	anim              *anim.Anim
 	thinkingExpanded  bool
 	thinkingBoxHeight int // Tracks the rendered thinking box height for click detection.
+
+	mdRenderer         *glamour.TermRenderer
+	mdRendererWidth    int
+	plainRenderer      *glamour.TermRenderer
+	plainRendererWidth int
 }
 
 // NewAssistantMessageItem creates a new AssistantMessageItem.
@@ -163,8 +169,11 @@ func (a *AssistantMessageItem) renderMessageContent(width int) string {
 
 // renderThinking renders the thinking/reasoning content with footer.
 func (a *AssistantMessageItem) renderThinking(thinking string, width int) string {
-	renderer := common.PlainMarkdownRenderer(a.sty, width)
-	rendered, err := renderer.Render(thinking)
+	if a.plainRenderer == nil || a.plainRendererWidth != width {
+		a.plainRenderer = common.PlainMarkdownRenderer(a.sty, width)
+		a.plainRendererWidth = width
+	}
+	rendered, err := a.plainRenderer.Render(thinking)
 	if err != nil {
 		rendered = thinking
 	}
@@ -205,8 +214,11 @@ func (a *AssistantMessageItem) renderThinking(thinking string, width int) string
 
 // renderMarkdown renders content as markdown.
 func (a *AssistantMessageItem) renderMarkdown(content string, width int) string {
-	renderer := common.MarkdownRenderer(a.sty, width)
-	result, err := renderer.Render(content)
+	if a.mdRenderer == nil || a.mdRendererWidth != width {
+		a.mdRenderer = common.MarkdownRenderer(a.sty, width)
+		a.mdRendererWidth = width
+	}
+	result, err := a.mdRenderer.Render(content)
 	if err != nil {
 		return content
 	}
