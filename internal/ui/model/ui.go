@@ -1876,11 +1876,17 @@ func (m *UI) handleKeyPressMsg(msg tea.KeyPressMsg) tea.Cmd {
 
 			switch {
 			case key.Matches(msg, m.keyMap.Editor.AddImage):
+				if !m.currentModelSupportsImages() {
+					break
+				}
 				if cmd := m.openFilesDialog(); cmd != nil {
 					cmds = append(cmds, cmd)
 				}
 
 			case key.Matches(msg, m.keyMap.Editor.PasteImage):
+				if !m.currentModelSupportsImages() {
+					break
+				}
 				idx := m.pasteIdx()
 				cmds = append(cmds, func() tea.Msg { return m.pasteImageFromClipboard(idx) })
 
@@ -2496,28 +2502,55 @@ func (m *UI) FullHelp() [][]key.Binding {
 		}
 		binds = append(binds, mainBinds)
 
-		binds = append(binds,
-			[]key.Binding{
+		switch m.focus {
+		case uiFocusEditor:
+			editorBinds := []key.Binding{
 				k.Editor.Newline,
-				k.Editor.AddImage,
-				k.Editor.PasteImage,
 				k.Editor.MentionFile,
 				k.Editor.OpenEditor,
-			},
-			[]key.Binding{
-				k.Editor.PrevUserMessage,
-				k.Editor.NextUserMessage,
-				k.Editor.ScrollToEnd,
-			},
-		)
-		if hasAttachments {
+			}
+			if m.currentModelSupportsImages() {
+				editorBinds = append(editorBinds, k.Editor.AddImage, k.Editor.PasteImage)
+			}
+			binds = append(binds, editorBinds)
 			binds = append(binds,
 				[]key.Binding{
-					k.Editor.AttachmentDeleteMode,
-					k.Editor.DeleteAllAttachments,
-					k.Editor.Escape,
+					k.Editor.PrevUserMessage,
+					k.Editor.NextUserMessage,
+					k.Editor.ScrollToEnd,
 				},
 			)
+			if hasAttachments {
+				binds = append(binds,
+					[]key.Binding{
+						k.Editor.AttachmentDeleteMode,
+						k.Editor.DeleteAllAttachments,
+						k.Editor.Escape,
+					},
+				)
+			}
+		case uiFocusMain:
+			binds = append(binds,
+				[]key.Binding{
+					k.Chat.UpDown,
+					k.Chat.UpDownOneItem,
+					k.Chat.PageUp,
+					k.Chat.PageDown,
+				},
+				[]key.Binding{
+					k.Chat.HalfPageUp,
+					k.Chat.HalfPageDown,
+					k.Chat.Home,
+					k.Chat.End,
+				},
+				[]key.Binding{
+					k.Chat.Copy,
+					k.Chat.ClearHighlight,
+				},
+			)
+			if m.pillsExpanded && hasIncompleteTodos(m.session.Todos) && m.promptQueue > 0 {
+				binds = append(binds, []key.Binding{k.Chat.PillLeft})
+			}
 		}
 	default:
 		binds = append(binds,
@@ -2526,14 +2559,16 @@ func (m *UI) FullHelp() [][]key.Binding {
 				k.Models,
 				k.Sessions,
 			},
-			[]key.Binding{
-				k.Editor.Newline,
-				k.Editor.AddImage,
-				k.Editor.PasteImage,
-				k.Editor.MentionFile,
-				k.Editor.OpenEditor,
-			},
 		)
+		editorBinds := []key.Binding{
+			k.Editor.Newline,
+			k.Editor.MentionFile,
+			k.Editor.OpenEditor,
+		}
+		if m.currentModelSupportsImages() {
+			editorBinds = append(editorBinds, k.Editor.AddImage, k.Editor.PasteImage)
+		}
+		binds = append(binds, editorBinds)
 		if hasAttachments {
 			binds = append(binds,
 				[]key.Binding{
@@ -2553,6 +2588,19 @@ func (m *UI) FullHelp() [][]key.Binding {
 	)
 
 	return binds
+}
+
+func (m *UI) currentModelSupportsImages() bool {
+	cfg := m.com.Config()
+	if cfg == nil {
+		return false
+	}
+	agentCfg, ok := cfg.Agents[config.AgentCoder]
+	if !ok {
+		return false
+	}
+	model := cfg.GetModelByType(agentCfg.Model)
+	return model != nil && model.SupportsImages
 }
 
 // toggleCompactMode toggles compact mode between uiChat and uiChatCompact states.
