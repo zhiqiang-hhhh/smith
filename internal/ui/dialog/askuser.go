@@ -2,6 +2,7 @@ package dialog
 
 import (
 	"fmt"
+	"image"
 	"strings"
 
 	"charm.land/bubbles/v2/help"
@@ -12,6 +13,7 @@ import (
 	"charm.land/lipgloss/v2"
 	"github.com/charmbracelet/crush/internal/askuser"
 	"github.com/charmbracelet/crush/internal/ui/common"
+	"github.com/charmbracelet/crush/internal/ui/list"
 	uv "github.com/charmbracelet/ultraviolet"
 	"github.com/charmbracelet/x/exp/charmtone"
 )
@@ -39,6 +41,22 @@ type AskUser struct {
 	vp      viewport.Model
 	vpDirty bool
 
+	renderedBody      string
+	renderedBodyWidth int
+
+	// Mouse selection state for body content.
+	mouseDown  bool
+	mouseDownX int
+	mouseDownY int
+	mouseDragX int
+	mouseDragY int
+
+	// Body viewport screen position, computed in Draw().
+	bodyScreenX int
+	bodyScreenY int
+	bodyScreenW int
+	bodyScreenH int
+
 	selectedOption int
 	selected       map[int]bool // for multi-select
 	textMode       bool         // true when in custom text input mode (while options exist)
@@ -57,6 +75,7 @@ type askUserKeyMap struct {
 	Back        key.Binding
 	ScrollUp    key.Binding
 	ScrollDown  key.Binding
+	Copy        key.Binding
 }
 
 var _ Dialog = (*AskUser)(nil)
@@ -130,6 +149,10 @@ func NewAskUser(com *common.Common, req askuser.QuestionRequest) *AskUser {
 				key.WithKeys("shift+down", "shift+j"),
 				key.WithHelp("shift+↓", "scroll down"),
 			),
+			Copy: key.NewBinding(
+				key.WithKeys("c"),
+				key.WithHelp("c", "copy plan"),
+			),
 		},
 		vpDirty: true,
 		vp: func() viewport.Model {
@@ -172,6 +195,40 @@ func (a *AskUser) HandleMsg(msg tea.Msg) Action {
 			return a.handleMultiSelectMode(msg)
 		}
 		return a.handleSingleSelectMode(msg)
+	case tea.MouseClickMsg:
+		if a.request.Body != "" {
+			cx, cy, ok := a.screenToBodyCoords(msg.X, msg.Y)
+			if ok {
+				a.mouseDown = true
+				a.mouseDownX = cx
+				a.mouseDownY = cy
+				a.mouseDragX = cx
+				a.mouseDragY = cy
+				a.vpDirty = true
+			}
+		}
+	case tea.MouseMotionMsg:
+		if a.mouseDown && a.request.Body != "" {
+			cx, cy, _ := a.screenToBodyCoords(msg.X, msg.Y)
+			a.mouseDragX = cx
+			a.mouseDragY = cy
+			a.vpDirty = true
+		}
+	case tea.MouseReleaseMsg:
+		if a.mouseDown {
+			a.mouseDown = false
+			if a.hasBodyHighlight() {
+				text := a.highlightedContent()
+				a.mouseDownX = 0
+				a.mouseDownY = 0
+				a.mouseDragX = 0
+				a.mouseDragY = 0
+				a.vpDirty = true
+				if text != "" {
+					return ActionCmd{common.CopyToClipboard(text, "Copied to clipboard")}
+				}
+			}
+		}
 	case tea.MouseWheelMsg:
 		a.vp, _ = a.vp.Update(msg)
 	}
@@ -183,6 +240,37 @@ func (a *AskUser) dismiss() Action {
 		Request: a.request,
 		Answers: nil,
 	}
+}
+
+func (a *AskUser) screenToBodyCoords(screenX, screenY int) (int, int, bool) {
+	x := screenX - a.bodyScreenX
+	y := screenY - a.bodyScreenY
+	if x < 0 || y < 0 || x >= a.bodyScreenW || y >= a.bodyScreenH {
+		return x, y + a.vp.YOffset(), false
+	}
+	return x, y + a.vp.YOffset(), true
+}
+
+func (a *AskUser) hasBodyHighlight() bool {
+	return a.mouseDownX != a.mouseDragX || a.mouseDownY != a.mouseDragY
+}
+
+func (a *AskUser) normalizedHighlightRange() (int, int, int, int) {
+	sy, sx := a.mouseDownY, a.mouseDownX
+	ey, ex := a.mouseDragY, a.mouseDragX
+	if sy > ey || (sy == ey && sx > ex) {
+		sy, sx, ey, ex = ey, ex, sy, sx
+	}
+	return sy, sx, ey, ex
+}
+
+func (a *AskUser) highlightedContent() string {
+	if a.renderedBody == "" {
+		return ""
+	}
+	startLine, startCol, endLine, endCol := a.normalizedHighlightRange()
+	area := image.Rect(0, 0, a.renderedBodyWidth, lipgloss.Height(a.renderedBody))
+	return list.HighlightContent(a.renderedBody, area, startLine, startCol, endLine, endCol)
 }
 
 func (a *AskUser) handleSingleSelectMode(msg tea.KeyPressMsg) Action {
@@ -202,6 +290,10 @@ func (a *AskUser) handleSingleSelectMode(msg tea.KeyPressMsg) Action {
 		if a.request.AllowText {
 			a.textMode = true
 			a.input.Focus()
+		}
+	case key.Matches(msg, a.keyMap.Copy):
+		if a.request.Body != "" {
+			return ActionCmd{common.CopyToClipboard(a.request.Body, "Plan copied to clipboard")}
 		}
 	default:
 		if r := msg.String(); len(r) == 1 && r[0] >= '1' && r[0] <= '9' {
@@ -324,9 +416,6 @@ func (a *AskUser) Cursor() *tea.Cursor {
 	cur.Y += inputStyle.GetBorderTopSize() +
 		inputStyle.GetMarginTop() +
 		inputStyle.GetPaddingTop() +
-		inputStyle.GetBorderBottomSize() +
-		inputStyle.GetMarginBottom() +
-		inputStyle.GetPaddingBottom() +
 		dialogStyle.GetPaddingTop() +
 		dialogStyle.GetMarginTop() +
 		dialogStyle.GetBorderTopSize()
@@ -346,7 +435,7 @@ func (a *AskUser) renderBody(width int) string {
 // contentHeightAboveInput returns the number of lines rendered above the text
 // input in the dialog, including the custom title and separator.
 func (a *AskUser) contentHeightAboveInput(innerWidth int) int {
-	const titleAndSeparatorHeight = 1
+	const titleAndSeparatorHeight = 2
 	questionStyle := lipgloss.NewStyle().
 		Width(innerWidth).
 		PaddingBottom(1)
@@ -494,8 +583,12 @@ func (a *AskUser) Draw(scr uv.Screen, area uv.Rectangle) *tea.Cursor {
 	questionHeight := lipgloss.Height(questionRendered)
 
 	if hasBody {
-		bodyRendered := a.renderBody(innerWidth - 1)
-		bodyHeight := lipgloss.Height(bodyRendered)
+		bodyWidth := innerWidth - 1
+		if a.vpDirty || a.renderedBodyWidth != bodyWidth {
+			a.renderedBody = a.renderBody(bodyWidth)
+			a.renderedBodyWidth = bodyWidth
+		}
+		bodyHeight := lipgloss.Height(a.renderedBody)
 		availableForBody := max(maxHeight-fixedHeight-questionHeight-1, 3)
 
 		needsScroll := bodyHeight > availableForBody
@@ -504,13 +597,22 @@ func (a *AskUser) Draw(scr uv.Screen, area uv.Rectangle) *tea.Cursor {
 			vpWidth = innerWidth - 1
 		}
 
-		var bodyView string
+		// Apply mouse highlight to body content.
+		bodyContent := a.renderedBody
+		if a.hasBodyHighlight() {
+			startLine, startCol, endLine, endCol := a.normalizedHighlightRange()
+			hlArea := image.Rect(0, 0, vpWidth, bodyHeight)
+			bodyContent = list.Highlight(bodyContent, hlArea, startLine, startCol, endLine, endCol, list.ToHighlighter(t.TextSelection))
+		}
+
 		a.vp.SetWidth(vpWidth)
 		a.vp.SetHeight(availableForBody)
 		if a.vpDirty || a.vp.Width() != vpWidth {
-			a.vp.SetContent(bodyRendered)
+			a.vp.SetContent(bodyContent)
 			a.vpDirty = false
 		}
+
+		var bodyView string
 		if needsScroll {
 			scrollbar := common.Scrollbar(t, availableForBody, a.vp.TotalLineCount(), availableForBody, a.vp.YOffset())
 			bodyView = lipgloss.JoinHorizontal(lipgloss.Top, a.vp.View(), scrollbar)
@@ -526,6 +628,15 @@ func (a *AskUser) Draw(scr uv.Screen, area uv.Rectangle) *tea.Cursor {
 
 		innerContent := lipgloss.JoinVertical(lipgloss.Left, parts...)
 		view := dialogStyle.Render(innerContent)
+
+		// Compute body viewport screen position for mouse coord translation.
+		viewWidth, viewHeight := lipgloss.Size(view)
+		center := common.CenterRect(area, viewWidth, viewHeight)
+		a.bodyScreenX = center.Min.X + dialogStyle.GetBorderLeftSize() + dialogStyle.GetPaddingLeft()
+		a.bodyScreenY = center.Min.Y + dialogStyle.GetBorderTopSize() + dialogStyle.GetPaddingTop() + headerHeight + questionHeight
+		a.bodyScreenW = vpWidth
+		a.bodyScreenH = availableForBody
+
 		cur := a.Cursor()
 		if cur != nil {
 			cur.Y += a.contentHeightAboveInput(innerWidth)
@@ -594,6 +705,9 @@ func (a *AskUser) ShortHelp() []key.Binding {
 	bindings := []key.Binding{a.keyMap.UpDown, a.keyMap.Select}
 	if a.request.AllowText {
 		bindings = append(bindings, a.keyMap.CustomInput)
+	}
+	if a.request.Body != "" {
+		bindings = append(bindings, a.keyMap.Copy)
 	}
 	bindings = append(bindings, a.keyMap.Close)
 	return bindings

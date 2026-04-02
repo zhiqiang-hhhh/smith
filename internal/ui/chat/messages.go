@@ -63,6 +63,19 @@ type TextPreviewable interface {
 	PendingTextPreview() *TextPreviewContent
 }
 
+// DiffPreviewContent holds diff content for preview.
+type DiffPreviewContent struct {
+	FilePath   string
+	OldContent string
+	NewContent string
+}
+
+// DiffPreviewable represents an item that can provide diff content for
+// preview after a mouse click.
+type DiffPreviewable interface {
+	PendingDiffPreview() *DiffPreviewContent
+}
+
 // KeyEventHandler is an interface for items that can handle key events.
 type KeyEventHandler interface {
 	HandleKeyEvent(key tea.KeyMsg) (bool, tea.Cmd)
@@ -308,6 +321,7 @@ func ExtractMessageItems(sty *styles.Styles, msg *message.Message, toolResults m
 				tc,
 				result,
 				msg.FinishReason() == message.FinishReasonCanceled || (result == nil && msg.IsFinished()),
+				msg.IsPlanMode,
 			))
 		}
 		return items

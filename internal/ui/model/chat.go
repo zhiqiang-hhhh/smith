@@ -46,6 +46,14 @@ type TextPreviewMsg struct {
 	Text  string
 }
 
+// DiffPreviewMsg is sent when a user clicks on a diff tool output to request
+// a diff preview dialog.
+type DiffPreviewMsg struct {
+	FilePath   string
+	OldContent string
+	NewContent string
+}
+
 // Chat represents the chat UI model that handles chat interactions and
 // messages.
 type Chat struct {
@@ -753,6 +761,13 @@ func (m *Chat) HandleDelayedClick(msg DelayedClickMsg) (bool, tea.Cmd) {
 			if previewable, ok := selectedItem.(chat.ImagePreviewable); ok {
 				if att := previewable.PendingImagePreview(); att != nil {
 					return true, func() tea.Msg { return ImagePreviewMsg{Attachment: *att} }
+				}
+			}
+			if previewable, ok := selectedItem.(chat.DiffPreviewable); ok {
+				if dp := previewable.PendingDiffPreview(); dp != nil {
+					return true, func() tea.Msg {
+						return DiffPreviewMsg{FilePath: dp.FilePath, OldContent: dp.OldContent, NewContent: dp.NewContent}
+					}
 				}
 			}
 			if previewable, ok := selectedItem.(chat.TextPreviewable); ok {

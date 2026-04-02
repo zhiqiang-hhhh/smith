@@ -9,6 +9,7 @@ import (
 	"github.com/charmbracelet/crush/internal/fsext"
 	"github.com/charmbracelet/crush/internal/message"
 	"github.com/charmbracelet/crush/internal/ui/styles"
+	"github.com/charmbracelet/x/ansi"
 )
 
 // -----------------------------------------------------------------------------
@@ -88,6 +89,17 @@ func (v *ViewToolRenderContext) RenderTool(sty *styles.Styles, width int, opts *
 		return joinToolParts(header, body)
 	}
 
+	// Handle unchanged file (meta has FilePath but no Content).
+	if meta.FilePath != "" && meta.Content == "" {
+		body := sty.Tool.Body.Render(fmt.Sprintf(
+			"%s %s %s",
+			sty.Tool.ResourceLoadedText.Render("Loaded"),
+			sty.Tool.ResourceLoadedIndicator.Render(styles.ArrowRightIcon),
+			sty.Tool.ResourceName.Render("file has not changed"),
+		))
+		return joinToolParts(header, body)
+	}
+
 	if content == "" {
 		return header
 	}
@@ -159,6 +171,7 @@ func (w *WriteToolRenderContext) RenderTool(sty *styles.Styles, width int, opts 
 // EditToolMessageItem is a message item that represents an edit tool call.
 type EditToolMessageItem struct {
 	*baseToolMessageItem
+	pendingDiffPreview *DiffPreviewContent
 }
 
 var _ ToolMessageItem = (*EditToolMessageItem)(nil)
@@ -170,7 +183,44 @@ func NewEditToolMessageItem(
 	result *message.ToolResult,
 	canceled bool,
 ) ToolMessageItem {
-	return newBaseToolMessageItem(sty, toolCall, result, &EditToolRenderContext{}, canceled)
+	return &EditToolMessageItem{
+		baseToolMessageItem: newBaseToolMessageItem(sty, toolCall, result, &EditToolRenderContext{}, canceled),
+	}
+}
+
+// HandleMouseClick implements MouseClickable.
+func (e *EditToolMessageItem) HandleMouseClick(btn ansi.MouseButton, x, y int) bool {
+	if btn != ansi.MouseLeft {
+		return false
+	}
+	result := e.baseToolMessageItem.result
+	if result == nil {
+		return true
+	}
+	var params tools.EditParams
+	if err := json.Unmarshal([]byte(e.toolCall.Input), &params); err != nil {
+		return true
+	}
+	var meta tools.EditResponseMetadata
+	if err := json.Unmarshal([]byte(result.Metadata), &meta); err != nil {
+		return true
+	}
+	if meta.OldContent == "" && meta.NewContent == "" {
+		return true
+	}
+	e.pendingDiffPreview = &DiffPreviewContent{
+		FilePath:   fsext.PrettyPath(params.FilePath),
+		OldContent: meta.OldContent,
+		NewContent: meta.NewContent,
+	}
+	return true
+}
+
+// PendingDiffPreview implements DiffPreviewable.
+func (e *EditToolMessageItem) PendingDiffPreview() *DiffPreviewContent {
+	p := e.pendingDiffPreview
+	e.pendingDiffPreview = nil
+	return p
 }
 
 // EditToolRenderContext renders edit tool messages.
@@ -222,6 +272,7 @@ func (e *EditToolRenderContext) RenderTool(sty *styles.Styles, width int, opts *
 // MultiEditToolMessageItem is a message item that represents a multi-edit tool call.
 type MultiEditToolMessageItem struct {
 	*baseToolMessageItem
+	pendingDiffPreview *DiffPreviewContent
 }
 
 var _ ToolMessageItem = (*MultiEditToolMessageItem)(nil)
@@ -233,7 +284,44 @@ func NewMultiEditToolMessageItem(
 	result *message.ToolResult,
 	canceled bool,
 ) ToolMessageItem {
-	return newBaseToolMessageItem(sty, toolCall, result, &MultiEditToolRenderContext{}, canceled)
+	return &MultiEditToolMessageItem{
+		baseToolMessageItem: newBaseToolMessageItem(sty, toolCall, result, &MultiEditToolRenderContext{}, canceled),
+	}
+}
+
+// HandleMouseClick implements MouseClickable.
+func (m *MultiEditToolMessageItem) HandleMouseClick(btn ansi.MouseButton, x, y int) bool {
+	if btn != ansi.MouseLeft {
+		return false
+	}
+	result := m.baseToolMessageItem.result
+	if result == nil {
+		return true
+	}
+	var params tools.MultiEditParams
+	if err := json.Unmarshal([]byte(m.toolCall.Input), &params); err != nil {
+		return true
+	}
+	var meta tools.MultiEditResponseMetadata
+	if err := json.Unmarshal([]byte(result.Metadata), &meta); err != nil {
+		return true
+	}
+	if meta.OldContent == "" && meta.NewContent == "" {
+		return true
+	}
+	m.pendingDiffPreview = &DiffPreviewContent{
+		FilePath:   fsext.PrettyPath(params.FilePath),
+		OldContent: meta.OldContent,
+		NewContent: meta.NewContent,
+	}
+	return true
+}
+
+// PendingDiffPreview implements DiffPreviewable.
+func (m *MultiEditToolMessageItem) PendingDiffPreview() *DiffPreviewContent {
+	p := m.pendingDiffPreview
+	m.pendingDiffPreview = nil
+	return p
 }
 
 // MultiEditToolRenderContext renders multi-edit tool messages.
