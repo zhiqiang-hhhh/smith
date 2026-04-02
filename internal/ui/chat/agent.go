@@ -25,13 +25,16 @@ type NestedToolContainer interface {
 	NestedTools() []ToolMessageItem
 	SetNestedTools(tools []ToolMessageItem)
 	AddNestedTool(tool ToolMessageItem)
+	SetStreamingText(text string)
+	StreamingText() string
 }
 
 // AgentToolMessageItem is a message item that represents an agent tool call.
 type AgentToolMessageItem struct {
 	*baseToolMessageItem
 
-	nestedTools []ToolMessageItem
+	nestedTools   []ToolMessageItem
+	streamingText string
 }
 
 var (
@@ -95,6 +98,17 @@ func (a *AgentToolMessageItem) AddNestedTool(tool ToolMessageItem) {
 	a.clearCache()
 }
 
+// SetStreamingText sets the current streaming text from the sub-agent.
+func (a *AgentToolMessageItem) SetStreamingText(text string) {
+	a.streamingText = text
+	a.clearCache()
+}
+
+// StreamingText returns the current streaming text.
+func (a *AgentToolMessageItem) StreamingText() string {
+	return a.streamingText
+}
+
 // AgentToolRenderContext renders agent tool messages.
 type AgentToolRenderContext struct {
 	agent *AgentToolMessageItem
@@ -103,7 +117,7 @@ type AgentToolRenderContext struct {
 // RenderTool implements the [ToolRenderer] interface.
 func (r *AgentToolRenderContext) RenderTool(sty *styles.Styles, width int, opts *ToolRenderOpts) string {
 	cappedWidth := cappedMessageWidth(width)
-	if !opts.ToolCall.Finished && !opts.IsCanceled() && len(r.agent.nestedTools) == 0 {
+	if !opts.ToolCall.Finished && !opts.IsCanceled() && len(r.agent.nestedTools) == 0 && r.agent.streamingText == "" {
 		return pendingTool(sty, "Agent", opts.Anim, opts.Compact, opts.CreatedAt)
 	}
 
@@ -158,6 +172,11 @@ func (r *AgentToolRenderContext) RenderTool(sty *styles.Styles, width int, opts 
 	for _, nestedTool := range nestedTools {
 		childView := nestedTool.Render(remainingWidth)
 		childTools.Child(childView)
+	}
+
+	if r.agent.streamingText != "" && !opts.HasResult() && !opts.IsCanceled() {
+		childTools.Child(sty.Chat.Message.AssistantBlurred.Render() +
+			truncateStreamingText(r.agent.streamingText, remainingWidth, 5))
 	}
 
 	// Build parts.
@@ -236,6 +255,12 @@ func (a *AgenticFetchToolMessageItem) AddNestedTool(tool ToolMessageItem) {
 	a.nestedTools = append(a.nestedTools, tool)
 	a.clearCache()
 }
+
+// SetStreamingText is a no-op for agentic fetch (does not stream sub-agent text).
+func (a *AgenticFetchToolMessageItem) SetStreamingText(_ string) {}
+
+// StreamingText returns empty string (agentic fetch has no streaming text).
+func (a *AgenticFetchToolMessageItem) StreamingText() string { return "" }
 
 // Animate progresses the message animation if it should be spinning.
 func (a *AgenticFetchToolMessageItem) Animate(msg anim.StepMsg) tea.Cmd {
@@ -365,7 +390,8 @@ func (r *AgenticFetchToolRenderContext) RenderTool(sty *styles.Styles, width int
 type WorkerToolMessageItem struct {
 	*baseToolMessageItem
 
-	nestedTools []ToolMessageItem
+	nestedTools   []ToolMessageItem
+	streamingText string
 }
 
 var (
@@ -427,6 +453,17 @@ func (w *WorkerToolMessageItem) AddNestedTool(tool ToolMessageItem) {
 	w.clearCache()
 }
 
+// SetStreamingText sets the current streaming text from the sub-agent.
+func (w *WorkerToolMessageItem) SetStreamingText(text string) {
+	w.streamingText = text
+	w.clearCache()
+}
+
+// StreamingText returns the current streaming text.
+func (w *WorkerToolMessageItem) StreamingText() string {
+	return w.streamingText
+}
+
 // WorkerToolRenderContext renders worker tool messages.
 type WorkerToolRenderContext struct {
 	worker *WorkerToolMessageItem
@@ -435,7 +472,7 @@ type WorkerToolRenderContext struct {
 // RenderTool implements the [ToolRenderer] interface.
 func (r *WorkerToolRenderContext) RenderTool(sty *styles.Styles, width int, opts *ToolRenderOpts) string {
 	cappedWidth := cappedMessageWidth(width)
-	if !opts.ToolCall.Finished && !opts.IsCanceled() && len(r.worker.nestedTools) == 0 {
+	if !opts.ToolCall.Finished && !opts.IsCanceled() && len(r.worker.nestedTools) == 0 && r.worker.streamingText == "" {
 		return pendingTool(sty, "Worker", opts.Anim, opts.Compact, opts.CreatedAt)
 	}
 
@@ -489,6 +526,11 @@ func (r *WorkerToolRenderContext) RenderTool(sty *styles.Styles, width int, opts
 		childTools.Child(childView)
 	}
 
+	if r.worker.streamingText != "" && !opts.HasResult() && !opts.IsCanceled() {
+		childTools.Child(sty.Chat.Message.AssistantBlurred.Render() +
+			truncateStreamingText(r.worker.streamingText, remainingWidth, 5))
+	}
+
 	var parts []string
 	parts = append(parts, childTools.Enumerator(roundedEnumerator(2, taskTagWidth-5)).String())
 
@@ -508,4 +550,23 @@ func (r *WorkerToolRenderContext) RenderTool(sty *styles.Styles, width int, opts
 	}
 
 	return workerResult
+}
+
+// truncateStreamingText returns the last maxLines lines of text, truncated
+// to the given width. Used to show a preview of sub-agent streaming output.
+func truncateStreamingText(text string, width, maxLines int) string {
+	text = strings.TrimSpace(text)
+	if text == "" {
+		return ""
+	}
+	lines := strings.Split(text, "\n")
+	if len(lines) > maxLines {
+		lines = lines[len(lines)-maxLines:]
+	}
+	for i, line := range lines {
+		if len(line) > width {
+			lines[i] = line[:width-3] + "..."
+		}
+	}
+	return strings.Join(lines, "\n")
 }
