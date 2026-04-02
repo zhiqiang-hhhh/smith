@@ -450,7 +450,7 @@ func createTransport(ctx context.Context, m config.MCPConfig, resolver config.Va
 			return nil, fmt.Errorf("mcp stdio config requires a non-empty 'command' field")
 		}
 		cmd := exec.CommandContext(ctx, home.Long(command), m.Args...)
-		cmd.Env = append(os.Environ(), m.ResolvedEnv()...)
+		cmd.Env = append(filterSensitiveEnv(os.Environ()), m.ResolvedEnv()...)
 		return &mcp.CommandTransport{
 			Command: cmd,
 		}, nil
@@ -506,6 +506,47 @@ func (rt headerRoundTripper) RoundTrip(req *http.Request) (*http.Response, error
 
 func mcpTimeout(m config.MCPConfig) time.Duration {
 	return time.Duration(cmp.Or(m.Timeout, 15)) * time.Second
+}
+
+// sensitiveEnvSubstrings contains substrings that identify environment
+// variables carrying secrets. Matching is case-insensitive.
+var sensitiveEnvSubstrings = []string{
+	"API_KEY",
+	"SECRET",
+	"TOKEN",
+	"PASSWORD",
+	"CREDENTIAL",
+	"PRIVATE_KEY",
+	"SIGNING_KEY",
+	"ENCRYPTION_KEY",
+	"ACCESS_KEY",
+	"PASSPHRASE",
+	"AUTH",
+	"DATABASE_URL",
+	"CONNECTION_STRING",
+	"_DSN",
+}
+
+// filterSensitiveEnv removes environment variables whose keys contain
+// secret-related substrings (case-insensitive) to prevent leaking
+// credentials to MCP child processes.
+func filterSensitiveEnv(env []string) []string {
+	filtered := make([]string, 0, len(env))
+	for _, entry := range env {
+		key, _, _ := strings.Cut(entry, "=")
+		upper := strings.ToUpper(key)
+		sensitive := false
+		for _, sub := range sensitiveEnvSubstrings {
+			if strings.Contains(upper, sub) {
+				sensitive = true
+				break
+			}
+		}
+		if !sensitive {
+			filtered = append(filtered, entry)
+		}
+	}
+	return filtered
 }
 
 func stdioCheck(old *exec.Cmd) error {
