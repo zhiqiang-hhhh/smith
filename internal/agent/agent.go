@@ -138,6 +138,7 @@ type sessionAgent struct {
 	tools              *csync.Slice[fantasy.AgentTool]
 
 	isSubAgent           bool
+	agentName            string
 	sessions             session.Service
 	messages             message.Service
 	fileTracker          filetracker.Service
@@ -160,6 +161,7 @@ type SessionAgentOptions struct {
 	SystemPromptPrefix   string
 	SystemPrompt         string
 	IsSubAgent           bool
+	AgentName            string
 	FileTracker          filetracker.Service
 	DisableAutoSummarize bool
 	MaxTokensToSummarize int64
@@ -182,6 +184,7 @@ func NewSessionAgent(
 		systemPromptPrefix:   csync.NewValue(opts.SystemPromptPrefix),
 		systemPrompt:         csync.NewValue(opts.SystemPrompt),
 		isSubAgent:           opts.IsSubAgent,
+		agentName:            opts.AgentName,
 		sessions:             opts.Sessions,
 		messages:             opts.Messages,
 		fileTracker:          opts.FileTracker,
@@ -985,8 +988,9 @@ func (a *sessionAgent) createUserMessage(ctx context.Context, call SessionAgentC
 	}
 	parts = append(parts, attachmentParts...)
 	msg, err := a.messages.Create(ctx, call.SessionID, message.CreateMessageParams{
-		Role:       message.User,
-		Parts:      parts,
+		Role:      message.User,
+		Parts:     parts,
+		AgentName: a.agentName,
 	})
 	if err != nil {
 		return message.Message{}, fmt.Errorf("failed to create user message: %w", err)

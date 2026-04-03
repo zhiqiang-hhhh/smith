@@ -60,10 +60,18 @@ const (
 )
 
 const (
-	AgentCoder  string = "coder"
-	AgentTask   string = "task"
-	AgentWorker string = "worker"
+	AgentCoder       string = "coder"
+	AgentPlanner     string = "planner"
+	AgentSuperpowers string = "superpowers"
+	AgentTask        string = "task"
+	AgentWorker      string = "worker"
 )
+
+// TopLevelAgents returns the agent IDs that can be selected as the main agent
+// by the user (as opposed to sub-agents like task/worker).
+func TopLevelAgents() []string {
+	return []string{AgentCoder, AgentPlanner, AgentSuperpowers}
+}
 
 type SelectedModel struct {
 	// The model id as used by the provider API.
@@ -532,6 +540,16 @@ func resolveReadOnlyTools(tools []string) []string {
 	return filterSlice(tools, readOnlyTools, true)
 }
 
+func resolvePlannerTools(tools []string) []string {
+	plannerTools := []string{
+		"agent", "ask_user", "diff", "fetch", "agentic_fetch", "glob", "grep",
+		"job_output", "ls", "lsp_diagnostics", "lsp_references",
+		"list_mcp_resources", "read_mcp_resource", "memory_search",
+		"sourcegraph", "todos", "view", "web_search",
+	}
+	return filterSlice(tools, plannerTools, true)
+}
+
 func filterSlice(data []string, mask []string, include bool) []string {
 	var filtered []string
 	for _, s := range data {
@@ -552,6 +570,24 @@ func (c *Config) SetupAgents() {
 			ID:           AgentCoder,
 			Name:         "Coder",
 			Description:  "An agent that helps with executing coding tasks.",
+			Model:        SelectedModelTypeLarge,
+			ContextPaths: c.Options.ContextPaths,
+			AllowedTools: allowedTools,
+		},
+
+		AgentPlanner: {
+			ID:           AgentPlanner,
+			Name:         "Planner",
+			Description:  "A read-only agent for codebase exploration and implementation planning.",
+			Model:        SelectedModelTypeLarge,
+			ContextPaths: c.Options.ContextPaths,
+			AllowedTools: resolvePlannerTools(allowedTools),
+		},
+
+		AgentSuperpowers: {
+			ID:           AgentSuperpowers,
+			Name:         "Superpowers",
+			Description:  "A methodology-driven agent emphasizing design-first thinking, TDD, and systematic debugging.",
 			Model:        SelectedModelTypeLarge,
 			ContextPaths: c.Options.ContextPaths,
 			AllowedTools: allowedTools,

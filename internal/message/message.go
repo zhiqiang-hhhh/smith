@@ -17,6 +17,7 @@ type CreateMessageParams struct {
 	Parts            []ContentPart
 	Model            string
 	Provider         string
+	AgentName        string
 	IsSummaryMessage bool
 }
 
@@ -99,6 +100,7 @@ func (s *service) Create(ctx context.Context, sessionID string, params CreateMes
 		Model:            sql.NullString{String: string(params.Model), Valid: true},
 		Provider:         sql.NullString{String: params.Provider, Valid: params.Provider != ""},
 		IsSummaryMessage: isSummary,
+		AgentName:        params.AgentName,
 	})
 	if err != nil {
 		return Message{}, err
@@ -290,6 +292,7 @@ func (s *service) fromDBItem(item db.Message) (Message, error) {
 		Parts:            parts,
 		Model:            item.Model.String,
 		Provider:         item.Provider.String,
+		AgentName:        item.AgentName,
 		CreatedAt:        item.CreatedAt,
 		UpdatedAt:        item.UpdatedAt,
 		IsSummaryMessage: item.IsSummaryMessage != 0,

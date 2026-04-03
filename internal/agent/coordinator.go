@@ -14,6 +14,7 @@ import (
 	"os"
 	"slices"
 	"strings"
+	"sync"
 
 	"charm.land/catwalk/pkg/catwalk"
 	"charm.land/fantasy"
@@ -59,8 +60,8 @@ var (
 )
 
 type Coordinator interface {
-	// INFO: (kujtim) this is not used yet we will use this when we have multiple agents
-	// SetMainAgent(string)
+	SetMainAgent(agentID string) error
+	ActiveAgent() string
 	Run(ctx context.Context, sessionID, prompt string, attachments ...message.Attachment) (*fantasy.AgentResult, error)
 	Cancel(sessionID string)
 	CancelAll()
@@ -87,8 +88,10 @@ type coordinator struct {
 	lspManager  *lsp.Manager
 	notify      pubsub.Publisher[notify.Notification]
 
-	currentAgent SessionAgent
-	agents       map[string]SessionAgent
+	agentMu        sync.RWMutex
+	currentAgent   SessionAgent
+	activeAgentID  string
+	agents         map[string]SessionAgent
 
 	readyWg errgroup.Group
 }
@@ -118,23 +121,32 @@ func NewCoordinator(
 		agents:      make(map[string]SessionAgent),
 	}
 
-	agentCfg, ok := cfg.Config().Agents[config.AgentCoder]
-	if !ok {
+	// Build all top-level agents (coder, planner, superpowers).
+	for _, agentID := range config.TopLevelAgents() {
+		agentCfg, ok := cfg.Config().Agents[agentID]
+		if !ok {
+			continue
+		}
+		promptFn, ok := agentPromptFunc[agentID]
+		if !ok {
+			continue
+		}
+		p, err := promptFn(prompt.WithWorkingDir(c.cfg.WorkingDir()))
+		if err != nil {
+			return nil, fmt.Errorf("building %s prompt: %w", agentID, err)
+		}
+		agent, err := c.buildAgent(ctx, p, agentCfg, false)
+		if err != nil {
+			return nil, fmt.Errorf("building %s agent: %w", agentID, err)
+		}
+		c.agents[agentID] = agent
+	}
+
+	if _, ok := c.agents[config.AgentCoder]; !ok {
 		return nil, errCoderAgentNotConfigured
 	}
-
-	// TODO: make this dynamic when we support multiple agents
-	prompt, err := coderPrompt(prompt.WithWorkingDir(c.cfg.WorkingDir()))
-	if err != nil {
-		return nil, err
-	}
-
-	agent, err := c.buildAgent(ctx, prompt, agentCfg, false)
-	if err != nil {
-		return nil, err
-	}
-	c.currentAgent = agent
-	c.agents[config.AgentCoder] = agent
+	c.currentAgent = c.agents[config.AgentCoder]
+	c.activeAgentID = config.AgentCoder
 
 	// Clean up transcript and key facts files when sessions are deleted.
 	go c.watchSessionDeletes(ctx)
@@ -186,7 +198,13 @@ func (c *coordinator) Run(ctx context.Context, sessionID string, prompt string, 
 		return nil, fmt.Errorf("failed to update models: %w", err)
 	}
 
-	model := c.currentAgent.Model()
+	// Snapshot the current agent under the lock so that a concurrent
+	// SetMainAgent call cannot swap it mid-request.
+	c.agentMu.RLock()
+	agent := c.currentAgent
+	c.agentMu.RUnlock()
+
+	model := agent.Model()
 	maxTokens := model.CatwalkCfg.DefaultMaxTokens
 	if model.ModelCfg.MaxTokens != 0 {
 		maxTokens = model.ModelCfg.MaxTokens
@@ -218,7 +236,7 @@ func (c *coordinator) Run(ctx context.Context, sessionID string, prompt string, 
 	}
 
 	run := func() (*fantasy.AgentResult, error) {
-		return c.currentAgent.Run(ctx, SessionAgentCall{
+		return agent.Run(ctx, SessionAgentCall{
 			SessionID:        sessionID,
 			Prompt:           prompt,
 			Attachments:      attachments,
@@ -442,6 +460,7 @@ func (c *coordinator) buildAgent(ctx context.Context, prompt *prompt.Prompt, age
 		SystemPromptPrefix:   largeProviderCfg.SystemPromptPrefix,
 		SystemPrompt:         "",
 		IsSubAgent:           isSubAgent,
+		AgentName:            agent.Name,
 		FileTracker:          c.filetracker,
 		DisableAutoSummarize: c.cfg.Config().Options.DisableAutoSummarize,
 		MaxTokensToSummarize: c.cfg.Config().Options.MaxTokensToSummarize,
@@ -980,35 +999,78 @@ func isExactoSupported(modelID string) bool {
 }
 
 func (c *coordinator) Cancel(sessionID string) {
-	c.currentAgent.Cancel(sessionID)
+	c.agentMu.RLock()
+	agent := c.currentAgent
+	c.agentMu.RUnlock()
+	agent.Cancel(sessionID)
 }
 
 func (c *coordinator) CancelAll() {
-	c.currentAgent.CancelAll()
+	c.agentMu.RLock()
+	agent := c.currentAgent
+	c.agentMu.RUnlock()
+	agent.CancelAll()
 }
 
 func (c *coordinator) ClearQueue(sessionID string) {
-	c.currentAgent.ClearQueue(sessionID)
+	c.agentMu.RLock()
+	agent := c.currentAgent
+	c.agentMu.RUnlock()
+	agent.ClearQueue(sessionID)
 }
 
 func (c *coordinator) IsBusy() bool {
-	return c.currentAgent.IsBusy()
+	c.agentMu.RLock()
+	agent := c.currentAgent
+	c.agentMu.RUnlock()
+	return agent.IsBusy()
 }
 
 func (c *coordinator) IsSessionBusy(sessionID string) bool {
-	return c.currentAgent.IsSessionBusy(sessionID)
+	c.agentMu.RLock()
+	agent := c.currentAgent
+	c.agentMu.RUnlock()
+	return agent.IsSessionBusy(sessionID)
+}
+
+func (c *coordinator) SetMainAgent(agentID string) error {
+	agent, ok := c.agents[agentID]
+	if !ok {
+		return fmt.Errorf("agent %q not found", agentID)
+	}
+	c.agentMu.Lock()
+	c.currentAgent = agent
+	c.activeAgentID = agentID
+	c.agentMu.Unlock()
+	return nil
+}
+
+func (c *coordinator) ActiveAgent() string {
+	c.agentMu.RLock()
+	id := c.activeAgentID
+	c.agentMu.RUnlock()
+	return id
 }
 
 func (c *coordinator) Model() Model {
-	return c.currentAgent.Model()
+	c.agentMu.RLock()
+	agent := c.currentAgent
+	c.agentMu.RUnlock()
+	return agent.Model()
 }
 
 func (c *coordinator) SmallModel() Model {
-	return c.currentAgent.SmallModel()
+	c.agentMu.RLock()
+	agent := c.currentAgent
+	c.agentMu.RUnlock()
+	return agent.SmallModel()
 }
 
 func (c *coordinator) SummaryModel() Model {
-	return c.currentAgent.SummaryModel()
+	c.agentMu.RLock()
+	agent := c.currentAgent
+	c.agentMu.RUnlock()
+	return agent.SummaryModel()
 }
 
 func (c *coordinator) UpdateModels(ctx context.Context) error {
@@ -1024,36 +1086,46 @@ func (c *coordinator) UpdateModels(ctx context.Context) error {
 		slog.Warn("Failed to build summary model, falling back to large", "error", err)
 	}
 
-	c.currentAgent.SetModels(large, small, summaryModel)
-
-	agentCfg, ok := c.cfg.Config().Agents[config.AgentCoder]
-	if !ok {
-		return errCoderAgentNotConfigured
+	// Update models and tools for all top-level agents.
+	for agentID, agent := range c.agents {
+		agent.SetModels(large, small, summaryModel)
+		agentCfg, ok := c.cfg.Config().Agents[agentID]
+		if !ok {
+			continue
+		}
+		tools, err := c.buildTools(ctx, agentCfg)
+		if err != nil {
+			return err
+		}
+		agent.SetTools(tools)
 	}
-
-	tools, err := c.buildTools(ctx, agentCfg)
-	if err != nil {
-		return err
-	}
-	c.currentAgent.SetTools(tools)
 	return nil
 }
 
 func (c *coordinator) QueuedPrompts(sessionID string) int {
-	return c.currentAgent.QueuedPrompts(sessionID)
+	c.agentMu.RLock()
+	agent := c.currentAgent
+	c.agentMu.RUnlock()
+	return agent.QueuedPrompts(sessionID)
 }
 
 func (c *coordinator) QueuedPromptsList(sessionID string) []string {
-	return c.currentAgent.QueuedPromptsList(sessionID)
+	c.agentMu.RLock()
+	agent := c.currentAgent
+	c.agentMu.RUnlock()
+	return agent.QueuedPromptsList(sessionID)
 }
 
 func (c *coordinator) Summarize(ctx context.Context, sessionID string) error {
-	summaryModel := c.currentAgent.SummaryModel()
+	c.agentMu.RLock()
+	agent := c.currentAgent
+	c.agentMu.RUnlock()
+	summaryModel := agent.SummaryModel()
 	providerCfg, ok := c.cfg.Config().Providers.Get(summaryModel.ModelCfg.Provider)
 	if !ok {
 		return errModelProviderNotConfigured
 	}
-	return c.currentAgent.Summarize(ctx, sessionID, getProviderOptions(summaryModel, providerCfg))
+	return agent.Summarize(ctx, sessionID, getProviderOptions(summaryModel, providerCfg))
 }
 
 func (c *coordinator) isUnauthorized(err error) bool {
