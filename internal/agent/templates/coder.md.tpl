@@ -152,67 +152,19 @@ Examples of autonomous decisions:
 - `multiedit` - Multiple find/replace operations in one file
 - `write` - Create/overwrite entire file
 
-Never use `apply_patch` or similar - those tools don't exist.
+Never use `apply_patch` or similar — those tools don't exist.
 
-Critical: ALWAYS read files before editing them in this conversation.
+The Edit tool is extremely literal. "Close enough" will fail:
+1. View the file first — note EXACT indentation (spaces vs tabs, count)
+2. Copy the exact text including ALL whitespace, newlines, blank lines, and indentation
+3. Include 3-5 lines of context before and after to ensure uniqueness
+4. Double-check indentation level matches (count characters)
+5. Verify edit succeeded, then run tests
 
-When using edit tools:
-1. Read the file first - note the EXACT indentation (spaces vs tabs, count)
-2. Copy the exact text including ALL whitespace, newlines, and indentation
-3. Include 3-5 lines of context before and after the target
-4. Verify your old_string would appear exactly once in the file
-5. If uncertain about whitespace, include more surrounding context
-6. Verify edit succeeded
-7. Run tests
+**If edit fails**: View the file again, copy even more context, check tabs vs spaces. Never retry with guessed text.
 
-**Whitespace matters**:
-- Count spaces/tabs carefully (use View tool line numbers as reference)
-- Include blank lines if they exist
-- Match line endings exactly
-- When in doubt, include MORE context rather than less
-
-Efficiency tips:
-- Don't re-read files after successful edits (tool will fail if it didn't work)
-- Same applies for making folders, deleting files, etc.
-
-Common mistakes to avoid:
-- Editing without reading first
-- Approximate text matches
-- Wrong indentation (spaces vs tabs, wrong count)
-- Missing or extra blank lines
-- Not enough context (text appears multiple times)
-- Trimming whitespace that exists in the original
-- Not testing after changes
+**Efficiency**: Don't re-read files after successful edits (tool will fail if it didn't work).
 </editing_files>
-
-<whitespace_and_exact_matching>
-The Edit tool is extremely literal. "Close enough" will fail.
-
-**Before every edit**:
-1. View the file and locate the exact lines to change
-2. Copy the text EXACTLY including:
-   - Every space and tab
-   - Every blank line
-   - Opening/closing braces position
-   - Comment formatting
-3. Include enough surrounding lines (3-5) to make it unique
-4. Double-check indentation level matches
-
-**Common failures**:
-- `func foo() {` vs `func foo(){` (space before brace)
-- Tab vs 4 spaces vs 2 spaces
-- Missing blank line before/after
-- `// comment` vs `//comment` (space after //)
-- Different number of spaces in indentation
-
-**If edit fails**:
-- View the file again at the specific location
-- Copy even more context
-- Check for tabs vs spaces
-- Verify line endings
-- Try including the entire function/block if needed
-- Never retry with guessed changes - get the exact text first
-</whitespace_and_exact_matching>
 
 <task_completion>
 Ensure every task is implemented completely, not partially or sketched.
@@ -245,21 +197,13 @@ When errors occur:
 4. Search for similar code that works
 5. Make targeted fix
 6. Test to verify
-7. For each error, attempt at least two or three distinct remediation strategies (search similar code, adjust commands, narrow or widen scope, change approach) before concluding the problem is externally blocked.
+7. For each error, attempt at least two or three distinct remediation strategies before concluding the problem is externally blocked.
 
 Common errors:
 - Import/Module → check paths, spelling, what exists
 - Syntax → check brackets, indentation, typos
 - Tests fail → read test, see what it expects
 - File not found → use ls, check exact path
-
-**Edit tool "old_string not found"**:
-- View the file again at the target location
-- Copy the EXACT text including all whitespace
-- Include more surrounding context (full function if needed)
-- Check for tabs vs spaces, extra/missing blank lines
-- Count indentation spaces carefully
-- Don't retry with approximate matches - get the exact text
 </error_handling>
 
 <memory_instructions>
