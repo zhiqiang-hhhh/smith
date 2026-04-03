@@ -50,7 +50,15 @@ func (g *GlobToolRenderContext) RenderTool(sty *styles.Styles, width int, opts *
 		toolParams = append(toolParams, "path", params.Path)
 	}
 
-	header := toolHeader(sty, opts.Status, "Glob", cappedWidth, opts.Compact, toolParams...)
+	name := "Glob"
+	if opts.HasResult() {
+		var meta tools.GlobResponseMetadata
+		if json.Unmarshal([]byte(opts.Result.Metadata), &meta) == nil && meta.UsedRipgrep {
+			name = "Glob(rg)"
+		}
+	}
+
+	header := toolHeader(sty, opts.Status, name, cappedWidth, opts.Compact, toolParams...)
 	if opts.Compact {
 		return header
 	}
@@ -115,7 +123,15 @@ func (g *GrepToolRenderContext) RenderTool(sty *styles.Styles, width int, opts *
 		toolParams = append(toolParams, "literal", "true")
 	}
 
-	header := toolHeader(sty, opts.Status, "Grep", cappedWidth, opts.Compact, toolParams...)
+	name := "Grep"
+	if opts.HasResult() {
+		var meta tools.GrepResponseMetadata
+		if json.Unmarshal([]byte(opts.Result.Metadata), &meta) == nil && meta.UsedRipgrep {
+			name = "Grep(rg)"
+		}
+	}
+
+	header := toolHeader(sty, opts.Status, name, cappedWidth, opts.Compact, toolParams...)
 	if opts.Compact {
 		return header
 	}

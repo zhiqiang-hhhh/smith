@@ -31,6 +31,7 @@ type GlobParams struct {
 type GlobResponseMetadata struct {
 	NumberOfFiles int  `json:"number_of_files"`
 	Truncated     bool `json:"truncated"`
+	UsedRipgrep   bool `json:"used_ripgrep"`
 }
 
 func NewGlobTool(workingDir string) fantasy.AgentTool {
@@ -47,7 +48,7 @@ func NewGlobTool(workingDir string) fantasy.AgentTool {
 			globCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
 			defer cancel()
 
-			files, truncated, err := globFiles(globCtx, params.Pattern, searchPath, 100)
+			files, truncated, usedRipgrep, err := globFiles(globCtx, params.Pattern, searchPath, 100)
 			if err != nil {
 				return fantasy.NewTextErrorResponse(fmt.Sprintf("error finding files: %s", err)), nil
 			}
@@ -68,26 +69,28 @@ func NewGlobTool(workingDir string) fantasy.AgentTool {
 				GlobResponseMetadata{
 					NumberOfFiles: len(files),
 					Truncated:     truncated,
+					UsedRipgrep:   usedRipgrep,
 				},
 			), nil
 		})
 }
 
-func globFiles(ctx context.Context, pattern, searchPath string, limit int) ([]string, bool, error) {
+func globFiles(ctx context.Context, pattern, searchPath string, limit int) ([]string, bool, bool, error) {
 	cmdRg := getRgCmd(ctx, pattern)
 	if cmdRg != nil {
 		cmdRg.Dir = searchPath
 		matches, err := runRipgrep(cmdRg, searchPath, limit)
 		if err == nil {
-			return matches, len(matches) >= limit && limit > 0, nil
+			return matches, len(matches) >= limit && limit > 0, true, nil
 		}
 		if ctx.Err() != nil {
-			return nil, false, ctx.Err()
+			return nil, false, false, ctx.Err()
 		}
 		slog.Warn("Ripgrep execution failed, falling back to doublestar", "error", err)
 	}
 
-	return fsext.GlobGitignoreAware(ctx, pattern, searchPath, limit)
+	files, truncated, err := fsext.GlobGitignoreAware(ctx, pattern, searchPath, limit)
+	return files, truncated, false, err
 }
 
 func runRipgrep(cmd *exec.Cmd, searchRoot string, limit int) ([]string, error) {

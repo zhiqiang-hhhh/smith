@@ -87,6 +87,7 @@ type grepMatch struct {
 type GrepResponseMetadata struct {
 	NumberOfMatches int  `json:"number_of_matches"`
 	Truncated       bool `json:"truncated"`
+	UsedRipgrep     bool `json:"used_ripgrep"`
 }
 
 const (
@@ -128,7 +129,7 @@ func NewGrepTool(workingDir string, config config.ToolGrep) fantasy.AgentTool {
 			searchCtx, cancel := context.WithTimeout(ctx, config.GetTimeout())
 			defer cancel()
 
-			matches, truncated, err := searchFiles(searchCtx, searchPattern, searchPath, params.Include, params.Context, 100)
+			matches, truncated, usedRipgrep, err := searchFiles(searchCtx, searchPattern, searchPath, params.Include, params.Context, 100)
 			if err != nil {
 				return fantasy.NewTextErrorResponse(fmt.Sprintf("error searching files: %v", err)), nil
 			}
@@ -187,23 +188,26 @@ func NewGrepTool(workingDir string, config config.ToolGrep) fantasy.AgentTool {
 				GrepResponseMetadata{
 					NumberOfMatches: matchCount,
 					Truncated:       truncated,
+					UsedRipgrep:     usedRipgrep,
 				},
 			), nil
 		})
 }
 
-func searchFiles(ctx context.Context, pattern, rootPath, include string, contextLines, limit int) ([]grepMatch, bool, error) {
+func searchFiles(ctx context.Context, pattern, rootPath, include string, contextLines, limit int) ([]grepMatch, bool, bool, error) {
 	if contextLines > 5 {
 		contextLines = 5
 	}
+	usedRipgrep := true
 	matches, err := searchWithRipgrep(ctx, pattern, rootPath, include, contextLines)
 	if err != nil {
 		if ctx.Err() != nil {
-			return nil, false, ctx.Err()
+			return nil, false, false, ctx.Err()
 		}
+		usedRipgrep = false
 		matches, err = searchFilesWithRegex(ctx, pattern, rootPath, include)
 		if err != nil {
-			return nil, false, err
+			return nil, false, false, err
 		}
 	}
 
@@ -226,7 +230,7 @@ func searchFiles(ctx context.Context, pattern, rootPath, include string, context
 		}
 	}
 
-	return matches, truncated, nil
+	return matches, truncated, usedRipgrep, nil
 }
 
 func searchWithRipgrep(ctx context.Context, pattern, path, include string, contextLines int) ([]grepMatch, error) {
@@ -350,11 +354,10 @@ func searchFilesWithRegex(ctx context.Context, pattern, rootPath, include string
 		}
 
 		if info.IsDir() {
-			// Check if directory should be skipped
-			if walker.ShouldSkip(path) {
+			if walker.ShouldSkipDir(path) {
 				return filepath.SkipDir
 			}
-			return nil // Continue into directory
+			return nil
 		}
 
 		// Use walker's shouldSkip method for files
