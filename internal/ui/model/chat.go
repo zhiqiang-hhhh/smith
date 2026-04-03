@@ -308,21 +308,23 @@ func (m *Chat) RestartPausedVisibleAnimations() tea.Cmd {
 
 	startIdx, endIdx := m.list.VisibleItemIndices()
 	var cmds []tea.Cmd
+	restarted := make(map[int]struct{})
 
 	for id := range m.pausedAnimations {
 		idx, ok := m.idInxMap[id]
 		if !ok {
-			// Item no longer exists.
 			delete(m.pausedAnimations, id)
 			continue
 		}
 
 		if idx >= startIdx && idx <= endIdx {
-			// Item is now visible - restart its animation.
-			if animatable, ok := m.list.ItemAt(idx).(chat.Animatable); ok {
-				if cmd := animatable.StartAnimation(); cmd != nil {
-					cmds = append(cmds, cmd)
+			if _, done := restarted[idx]; !done {
+				if animatable, ok := m.list.ItemAt(idx).(chat.Animatable); ok {
+					if cmd := animatable.StartAnimation(); cmd != nil {
+						cmds = append(cmds, cmd)
+					}
 				}
+				restarted[idx] = struct{}{}
 			}
 			delete(m.pausedAnimations, id)
 		}

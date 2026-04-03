@@ -987,8 +987,14 @@ func (a *sessionAgent) Summarize(ctx context.Context, sessionID string, opts fan
 		return err
 	}
 
-	// Update the session title based on the summarized conversation.
-	go a.generateTitle(ctx, sessionID, msgs, "")
+	// Update the session title using only the post-summary messages so the
+	// title model sees the condensed conversation instead of the full history.
+	postSummaryMsgs, err := a.getSessionMessages(ctx, currentSession)
+	if err != nil {
+		slog.Error("Failed to load post-summary messages for title generation", "error", err)
+		postSummaryMsgs = nil
+	}
+	go a.generateTitle(ctx, sessionID, postSummaryMsgs, "")
 
 	// Post-summarize cleanup: invalidate caches that hold data from the
 	// now-truncated conversation to prevent stale state.
@@ -1358,12 +1364,11 @@ func (a *sessionAgent) generateTitle(ctx context.Context, sessionID string, msgs
 		cost = *openrouterCost
 	}
 
-	promptTokens := resp.TotalUsage.InputTokens + resp.TotalUsage.CacheCreationTokens
-	completionTokens := resp.TotalUsage.OutputTokens
-
-	// Atomically update only title and usage fields to avoid overriding other
-	// concurrent session updates.
-	saveErr := a.sessions.UpdateTitleAndUsage(ctx, sessionID, title, promptTokens, completionTokens, cost)
+	// Only accumulate cost from title generation; do not add prompt/completion
+	// tokens because they reflect the title model's input (the full conversation
+	// history) and would inflate the session's context-usage counters, undoing
+	// any token reset performed by Summarize().
+	saveErr := a.sessions.UpdateTitleAndUsage(ctx, sessionID, title, 0, 0, cost)
 	if saveErr != nil {
 		slog.Error("Failed to save session title and usage", "error", saveErr)
 		return

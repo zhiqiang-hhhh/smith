@@ -695,10 +695,12 @@ func (m *UI) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		switch msg.Type {
 		case pubsub.CreatedEvent:
 			cmds = append(cmds, m.appendSessionMessage(msg.Payload))
+			m.renderPills()
 		case pubsub.UpdatedEvent:
 			cmds = append(cmds, m.updateSessionMessage(msg.Payload))
 		case pubsub.DeletedEvent:
 			m.chat.RemoveMessage(msg.Payload.ID)
+			m.renderPills()
 		}
 		// start the spinner if there is a new message
 		if hasInProgressTodo(m.session.Todos) && m.isAgentBusy() && !m.todoIsSpinning {
@@ -709,8 +711,6 @@ func (m *UI) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if m.todoIsSpinning && !m.isAgentBusy() {
 			m.todoIsSpinning = false
 		}
-		// there is a number of things that could change the pills here so we want to re-render
-		m.renderPills()
 	case pubsub.Event[history.File]:
 		cmds = append(cmds, m.handleFileEvent(msg.Payload))
 	case pubsub.Event[app.LSPEvent]:
@@ -962,9 +962,7 @@ func (m *UI) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				cmds = append(cmds, cmd)
 			}
 			if m.chat.Follow() {
-				if cmd := m.chat.ScrollToBottomAndAnimate(); cmd != nil {
-					cmds = append(cmds, cmd)
-				}
+				m.chat.ScrollToBottom()
 			}
 		}
 	case spinner.TickMsg:
@@ -3495,9 +3493,7 @@ func (m *UI) openPermissionsDialog(perm permission.PermissionRequest) tea.Cmd {
 
 // openAskUserDialog opens the ask_user dialog for an agent question.
 func (m *UI) openAskUserDialog(req askuser.QuestionRequest) {
-	if m.dialog.ContainsDialog(dialog.AskUserID) {
-		return
-	}
+	m.dialog.CloseDialog(dialog.AskUserID)
 	askDialog := dialog.NewAskUser(m.com, req)
 	m.dialog.OpenDialog(askDialog)
 }
