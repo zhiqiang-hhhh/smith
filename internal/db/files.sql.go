@@ -203,53 +203,21 @@ SELECT f.id, f.session_id, f.path, f.content, f.version, f.created_at, f.updated
 FROM files f
 INNER JOIN (
     SELECT path, MAX(version) as max_version, MAX(created_at) as max_created_at
-    FROM files
+    FROM files AS ff
+    WHERE ff.session_id = ?
     GROUP BY path
 ) latest ON f.path = latest.path AND f.version = latest.max_version AND f.created_at = latest.max_created_at
 WHERE f.session_id = ?
 ORDER BY f.path
 `
 
-func (q *Queries) ListLatestSessionFiles(ctx context.Context, sessionID string) ([]File, error) {
-	rows, err := q.query(ctx, q.listLatestSessionFilesStmt, listLatestSessionFiles, sessionID)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	items := []File{}
-	for rows.Next() {
-		var i File
-		if err := rows.Scan(
-			&i.ID,
-			&i.SessionID,
-			&i.Path,
-			&i.Content,
-			&i.Version,
-			&i.CreatedAt,
-			&i.UpdatedAt,
-		); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
+type ListLatestSessionFilesParams struct {
+	SessionID   string `json:"session_id"`
+	SessionID_2 string `json:"session_id_2"`
 }
 
-const listNewFiles = `-- name: ListNewFiles :many
-SELECT id, session_id, path, content, version, created_at, updated_at
-FROM files
-WHERE is_new = 1
-ORDER BY version DESC, created_at DESC
-`
-
-func (q *Queries) ListNewFiles(ctx context.Context) ([]File, error) {
-	rows, err := q.query(ctx, q.listNewFilesStmt, listNewFiles)
+func (q *Queries) ListLatestSessionFiles(ctx context.Context, arg ListLatestSessionFilesParams) ([]File, error) {
+	rows, err := q.query(ctx, q.listLatestSessionFilesStmt, listLatestSessionFiles, arg.SessionID, arg.SessionID_2)
 	if err != nil {
 		return nil, err
 	}

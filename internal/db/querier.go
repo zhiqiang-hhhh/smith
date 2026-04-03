@@ -35,13 +35,12 @@ type Querier interface {
 	ListAllUserMessages(ctx context.Context) ([]Message, error)
 	ListFilesByPath(ctx context.Context, path string) ([]File, error)
 	ListFilesBySession(ctx context.Context, sessionID string) ([]File, error)
-	ListLatestSessionFiles(ctx context.Context, sessionID string) ([]File, error)
+	ListLatestSessionFiles(ctx context.Context, arg ListLatestSessionFilesParams) ([]File, error)
 	ListMessagesBySession(ctx context.Context, sessionID string) ([]Message, error)
 	ListMessagesBySessionBefore(ctx context.Context, arg ListMessagesBySessionBeforeParams) ([]Message, error)
-	ListNewFiles(ctx context.Context) ([]File, error)
+	ListRecentMessagesBySession(ctx context.Context, arg ListRecentMessagesBySessionParams) ([]Message, error)
 	ListSessionReadFiles(ctx context.Context, sessionID string) ([]ReadFile, error)
 	ListSessions(ctx context.Context) ([]Session, error)
-	ListRecentMessagesBySession(ctx context.Context, arg ListRecentMessagesBySessionParams) ([]Message, error)
 	ListUserMessagesBySession(ctx context.Context, sessionID string) ([]Message, error)
 	RecordFileRead(ctx context.Context, arg RecordFileReadParams) error
 	RenameSession(ctx context.Context, arg RenameSessionParams) error

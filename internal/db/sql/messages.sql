@@ -63,8 +63,8 @@ ORDER BY rowid DESC
 LIMIT ?;
 
 -- name: ListMessagesBySessionBefore :many
-SELECT *
-FROM messages
-WHERE session_id = ? AND rowid < (SELECT rowid FROM messages WHERE id = ?)
-ORDER BY rowid DESC
+SELECT m.*
+FROM messages m
+WHERE m.session_id = ? AND m.rowid < (SELECT mm.rowid FROM messages mm WHERE mm.id = ?)
+ORDER BY m.rowid DESC
 LIMIT ?;
