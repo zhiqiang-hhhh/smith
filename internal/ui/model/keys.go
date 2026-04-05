@@ -148,8 +148,8 @@ func DefaultKeyMap() KeyMap {
 		key.WithHelp("ctrl+r+{i}", "delete attachment at index i"),
 	)
 	km.Editor.Escape = key.NewBinding(
-		key.WithKeys("esc", "alt+esc"),
-		key.WithHelp("esc", "cancel delete mode"),
+		key.WithKeys("ctrl+g"),
+		key.WithHelp("ctrl+g", "cancel delete mode"),
 	)
 	km.Editor.DeleteAllAttachments = key.NewBinding(
 		key.WithKeys("r"),
@@ -260,8 +260,8 @@ func DefaultKeyMap() KeyMap {
 		key.WithHelp("c/y", "copy"),
 	)
 	km.Chat.ClearHighlight = key.NewBinding(
-		key.WithKeys("esc", "alt+esc"),
-		key.WithHelp("esc", "clear selection"),
+		key.WithKeys("ctrl+g"),
+		key.WithHelp("ctrl+g", "clear selection"),
 	)
 	km.Chat.Expand = key.NewBinding(
 		key.WithKeys("space"),
@@ -272,7 +272,7 @@ func DefaultKeyMap() KeyMap {
 		key.WithHelp("y", "yes"),
 	)
 	km.Initialize.No = key.NewBinding(
-		key.WithKeys("n", "N", "esc", "alt+esc"),
+		key.WithKeys("n", "N", "ctrl+g"),
 		key.WithHelp("n", "no"),
 	)
 	km.Initialize.Switch = key.NewBinding(

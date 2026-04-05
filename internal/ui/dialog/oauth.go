@@ -333,7 +333,7 @@ func (m *OAuth) ShortHelp() []key.Binding {
 	case OAuthStateSuccess:
 		return []key.Binding{
 			key.NewBinding(
-				key.WithKeys("enter", "ctrl+y", "esc"),
+				key.WithKeys("enter", "ctrl+y", "ctrl+g"),
 				key.WithHelp("enter", "finish"),
 			),
 		}
