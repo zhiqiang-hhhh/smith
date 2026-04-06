@@ -93,6 +93,11 @@ type (
 		Name    string
 		Disable bool
 	}
+	// ActionForkSession is a message to fork a session to a new mux window.
+	// When SessionID is empty, the handler should use the current session.
+	ActionForkSession struct {
+		SessionID string
+	}
 )
 
 // Messages for API key input dialog.

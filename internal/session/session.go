@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
+	"regexp"
 	"strings"
 	"time"
 
@@ -172,6 +173,13 @@ func (s *service) Get(ctx context.Context, id string) (Session, error) {
 	return s.fromDBItem(dbSession), nil
 }
 
+var forkSuffixRe = regexp.MustCompile(`\s*\(fork \d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\)$`)
+
+func forkTitle(title string) string {
+	base := forkSuffixRe.ReplaceAllString(title, "")
+	return base + " (fork " + time.Now().Format("2006-01-02 15:04:05") + ")"
+}
+
 func (s *service) Fork(ctx context.Context, sessionID string) (Session, error) {
 	src, err := s.q.GetSessionByID(ctx, sessionID)
 	if err != nil {
@@ -189,7 +197,7 @@ func (s *service) Fork(ctx context.Context, sessionID string) (Session, error) {
 	newID := uuid.New().String()
 	newSession, err := qtx.CreateSession(ctx, db.CreateSessionParams{
 		ID:               newID,
-		Title:            src.Title + " (fork " + time.Now().Format("2006-01-02 15:04:05") + ")",
+		Title:            forkTitle(src.Title),
 		PromptTokens:     src.PromptTokens,
 		CompletionTokens: src.CompletionTokens,
 		Cost:             src.Cost,

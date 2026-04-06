@@ -12,7 +12,6 @@ import (
 	"math/rand"
 	"net/http"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"regexp"
 	"slices"
@@ -1588,6 +1587,18 @@ func (m *UI) handleDialogMsg(msg tea.Msg) tea.Cmd {
 	case dialog.ActionToggleMCP:
 		m.dialog.CloseDialog(dialog.CommandsID)
 		cmds = append(cmds, m.toggleMCP(msg.Name, msg.Disable))
+	case dialog.ActionForkSession:
+		m.dialog.CloseDialog(dialog.SessionsID)
+		m.dialog.CloseDialog(dialog.CommandsID)
+		sid := msg.SessionID
+		if sid == "" && m.session != nil {
+			sid = m.session.ID
+		}
+		if sid == "" {
+			cmds = append(cmds, util.ReportWarn("No session to fork"))
+			break
+		}
+		cmds = append(cmds, m.forkSessionToMuxWindow(sid))
 	case dialog.ActionInitializeProject:
 		if m.isAgentBusy() {
 			cmds = append(cmds, util.ReportWarn("Agent is busy, please wait before summarizing session..."))
@@ -1847,6 +1858,14 @@ func (m *UI) handleKeyPressMsg(msg tea.KeyPressMsg) tea.Cmd {
 			yolo := !m.com.Workspace.PermissionSkipRequests()
 			m.com.Workspace.PermissionSetSkipRequests(yolo)
 			m.setEditorPrompt(yolo)
+			return true
+		case key.Matches(msg, m.keyMap.ForkSession):
+			if m.hasSession() {
+				cmds = append(cmds, m.forkSessionToMuxWindow(m.session.ID))
+			}
+			return true
+		case key.Matches(msg, m.keyMap.NewWindow):
+			cmds = append(cmds, m.openNewMuxWindow())
 			return true
 		case key.Matches(msg, m.keyMap.Suspend):
 			if m.isAgentBusy() {
@@ -3181,22 +3200,60 @@ func (m *UI) hasSession() bool {
 	return m.session != nil && m.session.ID != ""
 }
 
+// forkSessionToMuxWindow forks the given session and opens the new session in
+// a new terminal multiplexer window.
+func (m *UI) forkSessionToMuxWindow(sessionID string) tea.Cmd {
+	return func() tea.Msg {
+		if !m.com.Mux.Available() {
+			return util.NewInfoMsg("No terminal multiplexer detected (tmux/psmux required)")
+		}
+		newSess, err := m.com.Workspace.ForkSession(context.TODO(), sessionID)
+		if err != nil {
+			return util.NewErrorMsg(err)
+		}
+		exe, err := os.Executable()
+		if err != nil {
+			return util.NewErrorMsg(err)
+		}
+		cwd, _ := os.Getwd()
+		if err := m.com.Mux.NewWindow(cwd, exe, "--session", newSess.ID); err != nil {
+			return util.NewErrorMsg(err)
+		}
+		return util.NewInfoMsg("Session forked to new window")
+	}
+}
+
+// openNewMuxWindow opens a fresh crush instance in a new mux window,
+// using the current working directory.
+func (m *UI) openNewMuxWindow() tea.Cmd {
+	return func() tea.Msg {
+		if !m.com.Mux.Available() {
+			return util.NewInfoMsg("No terminal multiplexer detected (tmux/psmux required)")
+		}
+		exe, err := os.Executable()
+		if err != nil {
+			return util.NewErrorMsg(err)
+		}
+		cwd, _ := os.Getwd()
+		if err := m.com.Mux.NewWindow(cwd, exe); err != nil {
+			return util.NewErrorMsg(err)
+		}
+		return util.NewInfoMsg("Opened crush in new window")
+	}
+}
+
 // syncTmuxSessionID sets (or clears) the @crush_session pane user option so
 // that external scripts can discover which session this instance is using.
-// It is a silent no-op when not running inside tmux.
+// It is a silent no-op when no multiplexer is available.
 func (m *UI) syncTmuxSessionID() {
-	if os.Getenv("TMUX") == "" {
+	if !m.com.Mux.Available() {
 		return
 	}
 	var val string
 	if m.session != nil && m.session.ID != "" {
 		val = m.session.ID
 	}
-	go func() {
-		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
-		defer cancel()
-		_ = exec.CommandContext(ctx, "tmux", "set-option", "-p", "@crush_session", val).Run()
-	}()
+	m.com.Mux.SetPaneOption("@crush_session", val)
 }
 
 // mimeOf detects the MIME type of the given content.
@@ -3368,10 +3425,12 @@ func (m *UI) cancelAgent() tea.Cmd {
 		return nil
 	}
 
-	// Check if there are queued prompts - if so, clear the queue.
+	// Check if there are queued prompts - if so, clear the queue and
+	// simultaneously enter canceling state so the next press cancels the agent.
 	if m.com.Workspace.AgentQueuedPrompts(m.session.ID) > 0 {
 		m.com.Workspace.AgentClearQueue(m.session.ID)
-		return nil
+		m.isCanceling = true
+		return cancelTimerCmd()
 	}
 
 	// First ctrl+g press - set canceling state and start timer.
@@ -3637,7 +3696,7 @@ func (m *UI) newSession() tea.Cmd {
 	m.syncTmuxSessionID()
 	m.sessionFiles = nil
 	m.sessionFileReads = nil
-	m.setState(uiLanding, uiFocusEditor)
+	m.setState(uiChat, uiFocusEditor)
 	m.textarea.Focus()
 	m.chat.Blur()
 	m.chat.ClearMessages()

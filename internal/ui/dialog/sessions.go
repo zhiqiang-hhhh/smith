@@ -46,6 +46,7 @@ type Session struct {
 		UpDown        key.Binding
 		Delete        key.Binding
 		Rename        key.Binding
+		Fork          key.Binding
 		ConfirmRename key.Binding
 		CancelRename  key.Binding
 		ConfirmDelete key.Binding
@@ -128,6 +129,10 @@ func NewSessions(com *common.Common, selectedSessionID string) (*Session, error)
 		key.WithKeys("n", "ctrl+g"),
 		key.WithHelp("n", "cancel"),
 	)
+	s.keyMap.Fork = key.NewBinding(
+		key.WithKeys("alt+shift+f", "alt+F"),
+		key.WithHelp("alt+F", "fork"),
+	)
 	s.keyMap.Close = CloseKey
 
 	return s, nil
@@ -206,6 +211,11 @@ func (s *Session) HandleMsg(msg tea.Msg) Action {
 				if item := s.list.SelectedItem(); item != nil {
 					sessionItem := item.(*SessionItem)
 					return ActionSelectSession{sessionItem.Session}
+				}
+			case key.Matches(msg, s.keyMap.Fork):
+				if item := s.list.SelectedItem(); item != nil {
+					sessionItem := item.(*SessionItem)
+					return ActionForkSession{SessionID: sessionItem.ID()}
 				}
 			default:
 				var cmd tea.Cmd
@@ -424,6 +434,7 @@ func (s *Session) ShortHelp() []key.Binding {
 			s.keyMap.UpDown,
 			s.keyMap.Rename,
 			s.keyMap.Delete,
+			s.keyMap.Fork,
 			s.keyMap.Select,
 			s.keyMap.Close,
 		}
@@ -437,6 +448,7 @@ func (s *Session) FullHelp() [][]key.Binding {
 		s.keyMap.UpDown,
 		s.keyMap.Rename,
 		s.keyMap.Delete,
+		s.keyMap.Fork,
 		s.keyMap.Select,
 		s.keyMap.Close,
 	}

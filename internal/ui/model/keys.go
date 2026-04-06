@@ -62,14 +62,16 @@ type KeyMap struct {
 	}
 
 	// Global key maps
-	Quit     key.Binding
-	Help     key.Binding
-	Commands key.Binding
-	Models   key.Binding
-	Suspend  key.Binding
-	Sessions key.Binding
-	YoloMode key.Binding
-	Tab      key.Binding
+	Quit        key.Binding
+	Help        key.Binding
+	Commands    key.Binding
+	Models      key.Binding
+	Suspend     key.Binding
+	Sessions    key.Binding
+	YoloMode    key.Binding
+	ForkSession key.Binding
+	NewWindow   key.Binding
+	Tab         key.Binding
 }
 
 func DefaultKeyMap() KeyMap {
@@ -101,6 +103,14 @@ func DefaultKeyMap() KeyMap {
 		YoloMode: key.NewBinding(
 			key.WithKeys("ctrl+y"),
 			key.WithHelp("ctrl+y", "yolo mode"),
+		),
+		ForkSession: key.NewBinding(
+			key.WithKeys("alt+shift+f", "alt+F"),
+			key.WithHelp("alt+F", "fork session"),
+		),
+		NewWindow: key.NewBinding(
+			key.WithKeys("alt+shift+c", "alt+C"),
+			key.WithHelp("alt+C", "new window"),
 		),
 		Tab: key.NewBinding(
 			key.WithKeys("tab"),

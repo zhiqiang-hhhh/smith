@@ -585,6 +585,24 @@ func (c *Client) DeleteSession(ctx context.Context, id string, sessionID string)
 	return nil
 }
 
+// ForkSession creates a copy of the given session (including messages, files,
+// and read-files) and returns the new session.
+func (c *Client) ForkSession(ctx context.Context, id string, sessionID string) (*proto.Session, error) {
+	rsp, err := c.post(ctx, fmt.Sprintf("/workspaces/%s/sessions/%s/fork", id, sessionID), nil, nil, nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to fork session: %w", err)
+	}
+	defer rsp.Body.Close()
+	if rsp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("failed to fork session: status code %d", rsp.StatusCode)
+	}
+	var sess proto.Session
+	if err := json.NewDecoder(rsp.Body).Decode(&sess); err != nil {
+		return nil, fmt.Errorf("failed to decode forked session: %w", err)
+	}
+	return &sess, nil
+}
+
 // ListUserMessages retrieves user-role messages for a session as proto types.
 func (c *Client) ListUserMessages(ctx context.Context, id string, sessionID string) ([]proto.Message, error) {
 	rsp, err := c.get(ctx, fmt.Sprintf("/workspaces/%s/sessions/%s/messages/user", id, sessionID), nil, nil)
