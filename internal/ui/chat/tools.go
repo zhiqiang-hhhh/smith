@@ -501,13 +501,13 @@ func toolEarlyStateContent(sty *styles.Styles, opts *ToolRenderOpts, width int) 
 	return msg, true
 }
 
-// runningStatusText builds a status line like "Running for 5s · ESC to cancel".
+// runningStatusText builds a status line like "Running for 5s · ctrl+g to cancel".
 func runningStatusText(startedAt time.Time) string {
 	if startedAt.IsZero() {
 		return "Waiting for tool response…"
 	}
 	elapsed := time.Since(startedAt)
-	return fmt.Sprintf("Running for %s · ESC to cancel", formatElapsed(elapsed))
+	return fmt.Sprintf("Running for %s · ctrl+g to cancel", formatElapsed(elapsed))
 }
 
 // formatElapsed formats a duration as a human-readable string: "3s", "1m 30s",
