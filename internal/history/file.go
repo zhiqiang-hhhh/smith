@@ -89,17 +89,13 @@ func (s *service) createWithVersion(ctx context.Context, sessionID, path, conten
 
 	// Retry loop for transaction conflicts
 	for attempt := range maxRetries {
-		// Start a transaction
 		tx, txErr := s.db.BeginTx(ctx, nil)
 		if txErr != nil {
 			return File{}, fmt.Errorf("failed to begin transaction: %w", txErr)
 		}
-		defer tx.Rollback() //nolint:errcheck
 
-		// Create a new queries instance with the transaction
 		qtx := s.q.WithTx(tx)
 
-		// Try to create the file within the transaction
 		dbFile, txErr := qtx.CreateFile(ctx, db.CreateFileParams{
 			ID:        uuid.New().String(),
 			SessionID: sessionID,
@@ -108,10 +104,9 @@ func (s *service) createWithVersion(ctx context.Context, sessionID, path, conten
 			Version:   version,
 		})
 		if txErr != nil {
-			// Check if this is a uniqueness constraint violation
+			tx.Rollback() //nolint:errcheck
 			if strings.Contains(txErr.Error(), "UNIQUE constraint failed") {
 				if attempt < maxRetries-1 {
-					// If we have retries left, increment version and try again
 					version++
 					continue
 				}
@@ -119,7 +114,6 @@ func (s *service) createWithVersion(ctx context.Context, sessionID, path, conten
 			return File{}, txErr
 		}
 
-		// Commit the transaction
 		if txErr = tx.Commit(); txErr != nil {
 			return File{}, fmt.Errorf("failed to commit transaction: %w", txErr)
 		}

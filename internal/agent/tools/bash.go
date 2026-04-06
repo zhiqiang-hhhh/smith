@@ -141,7 +141,7 @@ var bannedCommands = []string{
 	"ufw",
 }
 
-func bashDescription(attribution *config.Attribution, modelName string) string {
+func bashDescription(attribution *config.Attribution, modelName string) (string, error) {
 	bannedCommandsStr := strings.Join(bannedCommands, ", ")
 	var out bytes.Buffer
 	if err := bashDescriptionTpl.Execute(&out, bashDescriptionData{
@@ -150,10 +150,9 @@ func bashDescription(attribution *config.Attribution, modelName string) string {
 		Attribution:     *attribution,
 		ModelName:       modelName,
 	}); err != nil {
-		// this should never happen.
-		panic("failed to execute bash description template: " + err.Error())
+		return "", fmt.Errorf("failed to execute bash description template: %w", err)
 	}
-	return out.String()
+	return out.String(), nil
 }
 
 func blockFuncs() []shell.BlockFunc {
@@ -188,10 +187,14 @@ func blockFuncs() []shell.BlockFunc {
 	}
 }
 
-func NewBashTool(permissions permission.Service, workingDir string, attribution *config.Attribution, modelName string) fantasy.AgentTool {
+func NewBashTool(permissions permission.Service, workingDir string, attribution *config.Attribution, modelName string) (fantasy.AgentTool, error) {
+	desc, err := bashDescription(attribution, modelName)
+	if err != nil {
+		return nil, err
+	}
 	return fantasy.NewAgentTool(
 		BashToolName,
-		string(bashDescription(attribution, modelName)),
+		desc,
 		func(ctx context.Context, params BashParams, call fantasy.ToolCall) (fantasy.ToolResponse, error) {
 			if params.Command == "" {
 				return fantasy.NewTextErrorResponse("missing command"), nil
@@ -370,7 +373,7 @@ func NewBashTool(permissions permission.Service, workingDir string, attribution 
 			}
 			response := fmt.Sprintf("Command is taking longer than expected and has been moved to background.\n\nBackground shell ID: %s\n\nUse job_output tool to view output or job_kill to terminate.", bgShell.ID)
 			return fantasy.WithResponseMetadata(fantasy.NewTextResponse(response), metadata), nil
-		})
+		}), nil
 }
 
 // formatOutput formats the output of a completed command with error handling

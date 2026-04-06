@@ -536,9 +536,14 @@ func (c *coordinator) buildTools(ctx context.Context, agent config.Agent) ([]fan
 		}
 	}
 
+	bashTool, err := tools.NewBashTool(c.permissions, c.cfg.WorkingDir(), c.cfg.Config().Options.Attribution, modelName)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create bash tool: %w", err)
+	}
+
 	allTools = append(allTools,
 		tools.NewAskUserTool(c.askuser),
-		tools.NewBashTool(c.permissions, c.cfg.WorkingDir(), c.cfg.Config().Options.Attribution, modelName),
+		bashTool,
 		tools.NewJobOutputTool(),
 		tools.NewJobKillTool(),
 		tools.NewDiffTool(c.cfg.WorkingDir()),

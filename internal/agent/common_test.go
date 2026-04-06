@@ -206,8 +206,13 @@ func coderAgent(r *vcr.Recorder, env fakeEnv, large, small fantasy.LanguageModel
 		modelName = model.Name
 	}
 
+	bashTool, err := tools.NewBashTool(env.permissions, env.workingDir, cfg.Config().Options.Attribution, modelName)
+	if err != nil {
+		panic("test setup: " + err.Error())
+	}
+
 	allTools := []fantasy.AgentTool{
-		tools.NewBashTool(env.permissions, env.workingDir, cfg.Config().Options.Attribution, modelName),
+		bashTool,
 		tools.NewDownloadTool(env.permissions, env.workingDir, r.GetDefaultClient()),
 		tools.NewEditTool(nil, env.permissions, env.history, *env.filetracker, env.workingDir),
 		tools.NewMultiEditTool(nil, env.permissions, env.history, *env.filetracker, env.workingDir),

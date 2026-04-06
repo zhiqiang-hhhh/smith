@@ -37,6 +37,8 @@ func Connect(ctx context.Context, dataDir string) (*sql.DB, error) {
 		return nil, fmt.Errorf("failed to connect to database: %w", err)
 	}
 
+	db.SetMaxOpenConns(1)
+
 	goose.SetBaseFS(FS)
 
 	if err := goose.SetDialect("sqlite3"); err != nil {
