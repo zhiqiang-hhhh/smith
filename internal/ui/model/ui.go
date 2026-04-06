@@ -405,7 +405,7 @@ func New(com *common.Common, initialSessionID string, continueLast bool) *UI {
 	// set onboarding state defaults
 	ui.onboarding.yesInitializeSelected = true
 
-	desiredState := uiLanding
+	desiredState := uiChat
 	desiredFocus := uiFocusEditor
 	if !com.Config().IsConfigured() {
 		desiredState = uiOnboarding
@@ -449,8 +449,8 @@ func (m *UI) Init() tea.Cmd {
 // loadInitialSession loads the initial session if one was specified on startup.
 func (m *UI) loadInitialSession() tea.Cmd {
 	switch {
-	case m.state != uiLanding:
-		// Only load if we're in landing state (i.e., fully configured)
+	case m.state != uiChat:
+		// Only load if we're in chat state (i.e., fully configured)
 		return nil
 	case m.initialSessionID != "":
 		return m.loadSession(m.initialSessionID)

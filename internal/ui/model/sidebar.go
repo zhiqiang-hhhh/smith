@@ -124,17 +124,16 @@ func getDynamicHeightLimits(availableHeight int) (maxFiles, maxLSPs, maxMCPs int
 // sidebar renders the chat sidebar containing session title, working
 // directory, model info, file list, LSP status, and MCP status.
 func (m *UI) drawSidebar(scr uv.Screen, area uv.Rectangle) {
-	if m.session == nil {
-		return
-	}
-
 	const logoHeightBreakpoint = 30
 
 	t := m.com.Styles
 	width := area.Dx()
 	height := area.Dy()
 
-	title := t.Muted.Width(width).MaxHeight(2).Render(m.session.Title)
+	var title string
+	if m.session != nil {
+		title = t.Muted.Width(width).MaxHeight(2).Render(m.session.Title)
+	}
 	cwd := common.PrettyPath(t, m.com.Workspace.WorkingDir(), width)
 	sidebarLogo := m.sidebarLogo
 	if height < logoHeightBreakpoint {
