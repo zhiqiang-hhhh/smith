@@ -7,6 +7,7 @@ import (
 	"context"
 	"os"
 	"os/exec"
+	"strings"
 	"time"
 )
 
@@ -92,6 +93,52 @@ func (m *Mux) PaneCwd() string {
 		s = s[:len(s)-1]
 	}
 	return s
+}
+
+// ActiveCrushSessions returns the @crush_session values from all panes.
+// This is used to mark which sessions are currently open.
+func (m *Mux) ActiveCrushSessions() []string {
+	if m == nil {
+		return nil
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	out, err := exec.CommandContext(ctx, m.bin, "list-panes", "-a", "-F", "#{@crush_session}").Output()
+	if err != nil {
+		return nil
+	}
+	var ids []string
+	for _, line := range strings.Split(strings.TrimSpace(string(out)), "\n") {
+		line = strings.TrimSpace(line)
+		if line != "" {
+			ids = append(ids, line)
+		}
+	}
+	return ids
+}
+
+// SelectPaneBySession switches to the mux pane that has the given
+// @crush_session value. It first selects the window containing the pane,
+// then selects the pane itself. Returns true if such a pane was found.
+func (m *Mux) SelectPaneBySession(sessionID string) bool {
+	if m == nil {
+		return false
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	out, err := exec.CommandContext(ctx, m.bin, "list-panes", "-a", "-F", "#{@crush_session} #{window_id} #{pane_id}").Output()
+	if err != nil {
+		return false
+	}
+	for _, line := range strings.Split(strings.TrimSpace(string(out)), "\n") {
+		parts := strings.Fields(strings.TrimSpace(line))
+		if len(parts) == 3 && parts[0] == sessionID {
+			_ = m.run("select-window", "-t", parts[1])
+			_ = m.run("select-pane", "-t", parts[2])
+			return true
+		}
+	}
+	return false
 }
 
 func (m *Mux) run(args ...string) error {
