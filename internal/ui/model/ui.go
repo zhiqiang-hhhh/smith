@@ -29,6 +29,7 @@ import (
 	"github.com/charmbracelet/crush/internal/agent/notify"
 	agenttools "github.com/charmbracelet/crush/internal/agent/tools"
 	"github.com/charmbracelet/crush/internal/agent/tools/mcp"
+	"github.com/charmbracelet/crush/internal/app"
 	"github.com/charmbracelet/crush/internal/askuser"
 	"github.com/charmbracelet/crush/internal/commands"
 	"github.com/charmbracelet/crush/internal/config"
@@ -567,6 +568,8 @@ func (m *UI) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.notifyWindowFocused = true
 	case tea.BlurMsg:
 		m.notifyWindowFocused = false
+	case app.UpdateAvailableMsg:
+		cmds = append(cmds, util.ReportInfo(fmt.Sprintf("Update available: %s → %s", msg.CurrentVersion, msg.LatestVersion)))
 	case pubsub.Event[notify.Notification]:
 		if cmd := m.handleAgentNotification(msg.Payload); cmd != nil {
 			cmds = append(cmds, cmd)
@@ -4286,15 +4289,26 @@ func (m *UI) toggleMCP(name string, disable bool) tea.Cmd {
 			return mcpToggledMsg{Name: name, Disabled: true, Info: fmt.Sprintf("MCP %s disabled", name)}
 		}
 
+		// Update in-memory config before InitializeSingle, which checks
+		// the Disabled field to decide whether to proceed.
+		if cfg, ok := store.Config().MCP[name]; ok {
+			cfg.Disabled = false
+			store.Config().MCP[name] = cfg
+		}
+		if err := m.persistMCPDisabled(store, name, false); err != nil {
+			return util.ReportError(err)()
+		}
 		ctx := context.Background()
 		if err := mcp.InitializeSingle(ctx, name, store); err != nil {
+			if cfg, ok := store.Config().MCP[name]; ok {
+				cfg.Disabled = true
+				store.Config().MCP[name] = cfg
+			}
+			_ = m.persistMCPDisabled(store, name, true)
 			return TextPreviewMsg{
 				Title: fmt.Sprintf("Failed to enable MCP: %s", name),
 				Text:  err.Error(),
 			}
-		}
-		if err := m.persistMCPDisabled(store, name, false); err != nil {
-			return util.ReportError(err)()
 		}
 		return mcpToggledMsg{Name: name, Disabled: false, Info: fmt.Sprintf("MCP %s enabled", name)}
 	}
