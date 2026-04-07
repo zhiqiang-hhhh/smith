@@ -152,7 +152,7 @@ func getCopilotToken(ctx context.Context, githubToken string) (*oauth.Token, err
 		return nil, err
 	}
 	req.Header.Set("Accept", "application/json")
-	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", githubToken))
+	req.Header.Set("Authorization", "token "+githubToken)
 	for k, v := range Headers() {
 		req.Header.Set(k, v)
 	}

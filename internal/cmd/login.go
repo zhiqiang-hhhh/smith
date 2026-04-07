@@ -151,10 +151,14 @@ func loginCopilot(ctx context.Context, c *client.Client, wsID string) error {
 
 		t, err := copilot.RefreshToken(loginCtx, diskToken)
 		if err != nil {
-			return fmt.Errorf("unable to refresh token from disk: %w", err)
+			fmt.Fprintf(os.Stderr, "Disk token failed: %v\nFalling back to device flow...\n\n", err)
+			hasDiskToken = false
+		} else {
+			token = t
 		}
-		token = t
-	default:
+	}
+
+	if !hasDiskToken {
 		fmt.Println("Requesting device code from GitHub...")
 		dc, err := copilot.RequestDeviceCode(loginCtx)
 		if err != nil {
@@ -192,6 +196,18 @@ func loginCopilot(ctx context.Context, c *client.Client, wsID string) error {
 		c.SetConfigField(loginCtx, wsID, config.ScopeGlobal, "providers.copilot.oauth", token),
 	); err != nil {
 		return err
+	}
+
+	fmt.Println("Fetching available models...")
+	models, err := copilot.FetchModels(loginCtx, token.AccessToken)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Warning: failed to fetch models: %v\n", err)
+	} else if len(models) > 0 {
+		if err := c.SetConfigField(loginCtx, wsID, config.ScopeGlobal, "providers.copilot.models", models); err != nil {
+			fmt.Fprintf(os.Stderr, "Warning: failed to save models: %v\n", err)
+		} else {
+			fmt.Printf("Synced %d models from Copilot API.\n", len(models))
+		}
 	}
 
 	fmt.Println()
