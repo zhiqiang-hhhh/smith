@@ -494,6 +494,11 @@ func (c *Commands) defaultCommands() []*CommandItem {
 		commands = append(commands, NewCommandItem(c.com.Styles, "disable_docker_mcp", "Disable Docker MCP Catalog", "", ActionDisableDockerMCP{}))
 	}
 
+	// Add Copilot model refresh if Copilot is configured with OAuth.
+	if pc, ok := cfg.Providers.Get("copilot"); ok && pc.OAuthToken != nil {
+		commands = append(commands, NewCommandItem(c.com.Styles, "refresh_copilot_models", "Refresh Copilot Models", "", ActionRefreshCopilotModels{}))
+	}
+
 	// Add toggle commands for each non-Docker MCP server.
 	for _, m := range cfg.MCP.Sorted() {
 		if m.Name == config.DockerMCPName {

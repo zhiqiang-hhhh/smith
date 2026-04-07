@@ -137,7 +137,26 @@ func loginCopilot(ctx context.Context, c *client.Client, wsID string) error {
 	cfg, err := c.GetConfig(ctx, wsID)
 	if err == nil && cfg != nil {
 		if pc, ok := cfg.Providers.Get("copilot"); ok && pc.OAuthToken != nil {
-			fmt.Println("You are already logged in to GitHub Copilot.")
+			fmt.Println("Already logged in. Refreshing token and syncing models...")
+			t, err := copilot.RefreshToken(loginCtx, pc.OAuthToken.RefreshToken)
+			if err != nil {
+				return fmt.Errorf("failed to refresh token: %w", err)
+			}
+			fields := map[string]any{
+				"providers.copilot.api_key": t.AccessToken,
+				"providers.copilot.oauth":   t,
+			}
+			if models, err := copilot.FetchModels(loginCtx, t.AccessToken); err != nil {
+				fmt.Fprintf(os.Stderr, "Warning: failed to fetch models: %v\n", err)
+			} else if len(models) > 0 {
+				fields["providers.copilot.models"] = models
+				fmt.Printf("Synced %d models.\n", len(models))
+			}
+			for k, v := range fields {
+				if err := c.SetConfigField(ctx, wsID, config.ScopeGlobal, k, v); err != nil {
+					return err
+				}
+			}
 			return nil
 		}
 	}

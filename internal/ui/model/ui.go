@@ -1617,6 +1617,9 @@ func (m *UI) handleDialogMsg(msg tea.Msg) tea.Cmd {
 	case dialog.ActionDisableDockerMCP:
 		m.dialog.CloseDialog(dialog.CommandsID)
 		cmds = append(cmds, m.disableDockerMCP)
+	case dialog.ActionRefreshCopilotModels:
+		m.dialog.CloseDialog(dialog.CommandsID)
+		cmds = append(cmds, m.refreshCopilotModels())
 	case dialog.ActionToggleMCP:
 		m.dialog.CloseDialog(dialog.CommandsID)
 		cmds = append(cmds, m.toggleMCP(msg.Name, msg.Disable))
@@ -4251,6 +4254,20 @@ func (m *UI) disableDockerMCP() tea.Msg {
 	}
 
 	return util.NewInfoMsg("Docker MCP disabled successfully")
+}
+
+func (m *UI) refreshCopilotModels() tea.Cmd {
+	return func() tea.Msg {
+		store := m.com.App.Store()
+		ctx := context.Background()
+		if err := store.RefreshOAuthToken(ctx, config.ScopeGlobal, "copilot"); err != nil {
+			return util.ReportError(err)()
+		}
+		if err := m.com.App.UpdateAgentModel(ctx); err != nil {
+			return util.ReportError(err)()
+		}
+		return util.NewInfoMsg("Copilot token and models refreshed")
+	}
 }
 
 func (m *UI) toggleMCP(name string, disable bool) tea.Cmd {

@@ -210,10 +210,19 @@ func (s *ConfigStore) SetProviderAPIKey(scope Scope, providerID string, apiKey a
 		}
 		setKeyOrToken = func() { providerConfig.APIKey = v }
 	case *oauth.Token:
-		if err := cmp.Or(
-			s.SetConfigField(scope, fmt.Sprintf("providers.%s.api_key", providerID), v.AccessToken),
-			s.SetConfigField(scope, fmt.Sprintf("providers.%s.oauth", providerID), v),
-		); err != nil {
+		fields := map[string]any{
+			fmt.Sprintf("providers.%s.api_key", providerID): v.AccessToken,
+			fmt.Sprintf("providers.%s.oauth", providerID):   v,
+		}
+		if providerID == string(catwalk.InferenceProviderCopilot) {
+			if models, err := copilot.FetchModels(context.Background(), v.AccessToken); err != nil {
+				slog.Warn("Failed to sync Copilot models on login", "error", err)
+			} else if len(models) > 0 {
+				fields["providers.copilot.models"] = models
+				slog.Info("Synced Copilot models on login", "count", len(models))
+			}
+		}
+		if err := s.SetConfigFields(scope, fields); err != nil {
 			return err
 		}
 		setKeyOrToken = func() {
