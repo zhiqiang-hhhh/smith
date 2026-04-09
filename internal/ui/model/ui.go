@@ -657,6 +657,7 @@ func (m *UI) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if msg.session.ID != "" {
 			m.session = &msg.session
 			m.syncTmuxSessionID()
+			m.syncTmuxPaneTitle()
 			cmds = append(cmds, m.loadSession(msg.session.ID))
 		}
 		cmds = append(cmds, m.sendMessageWithSession(msg.content, msg.attachments...))
@@ -707,6 +708,7 @@ func (m *UI) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if m.session != nil && msg.Payload.ID == m.session.ID {
 			prevHasInProgress := hasInProgressTodo(m.session.Todos)
 			m.session = &msg.Payload
+			m.syncTmuxPaneTitle()
 			if !prevHasInProgress && hasInProgressTodo(m.session.Todos) {
 				m.todoIsSpinning = true
 				cmds = append(cmds, m.todoSpinner.Tick)
@@ -3326,6 +3328,19 @@ func (m *UI) syncTmuxSessionID() {
 		val = m.session.ID
 	}
 	m.com.Mux.SetPaneOption("@crush_session", val)
+}
+
+// syncTmuxPaneTitle updates the tmux pane title to reflect the current
+// session title. Called when a session is loaded or its title changes.
+func (m *UI) syncTmuxPaneTitle() {
+	if !m.com.Mux.Available() || m.session == nil {
+		return
+	}
+	title := m.session.Title
+	if title == "" || title == "New Session" {
+		return
+	}
+	m.com.Mux.SetPaneTitle("CC " + title)
 }
 
 // mimeOf detects the MIME type of the given content.

@@ -58,6 +58,16 @@ func (m *Mux) SetPaneOption(key, value string) {
 	}()
 }
 
+// SetPaneTitle sets the title of the current pane.
+func (m *Mux) SetPaneTitle(title string) {
+	if m == nil {
+		return
+	}
+	go func() {
+		_ = m.run("select-pane", "-T", title)
+	}()
+}
+
 // GetPaneOption reads a pane-level user option.  Returns "" on any error.
 func (m *Mux) GetPaneOption(key string) string {
 	if m == nil {
