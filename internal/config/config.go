@@ -504,7 +504,6 @@ func allToolNames() []string {
 	return []string{
 		"agent",
 		"worker",
-		"ask_user",
 		"bash",
 		"job_output",
 		"job_kill",
@@ -544,7 +543,7 @@ func resolveReadOnlyTools(tools []string) []string {
 
 func resolvePlannerTools(tools []string) []string {
 	plannerTools := []string{
-		"agent", "ask_user", "diff", "fetch", "agentic_fetch", "glob", "grep",
+		"agent", "diff", "fetch", "agentic_fetch", "glob", "grep",
 		"ls",
 		"list_mcp_resources", "read_mcp_resource", "memory_search",
 		"sourcegraph", "todos", "view", "web_search",

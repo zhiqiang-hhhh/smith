@@ -30,7 +30,6 @@ import (
 	agenttools "github.com/charmbracelet/crush/internal/agent/tools"
 	"github.com/charmbracelet/crush/internal/agent/tools/mcp"
 	"github.com/charmbracelet/crush/internal/app"
-	"github.com/charmbracelet/crush/internal/askuser"
 	"github.com/charmbracelet/crush/internal/commands"
 	"github.com/charmbracelet/crush/internal/config"
 	"github.com/charmbracelet/crush/internal/fsext"
@@ -41,7 +40,6 @@ import (
 	"github.com/charmbracelet/crush/internal/pubsub"
 	"github.com/charmbracelet/crush/internal/search"
 	"github.com/charmbracelet/crush/internal/session"
-	"github.com/charmbracelet/crush/internal/update"
 	"github.com/charmbracelet/crush/internal/ui/anim"
 	"github.com/charmbracelet/crush/internal/ui/attachments"
 	"github.com/charmbracelet/crush/internal/ui/chat"
@@ -53,6 +51,7 @@ import (
 	"github.com/charmbracelet/crush/internal/ui/notification"
 	"github.com/charmbracelet/crush/internal/ui/styles"
 	"github.com/charmbracelet/crush/internal/ui/util"
+	"github.com/charmbracelet/crush/internal/update"
 	"github.com/charmbracelet/crush/internal/version"
 	"github.com/charmbracelet/crush/internal/workspace"
 	uv "github.com/charmbracelet/ultraviolet"
@@ -261,8 +260,8 @@ type UI struct {
 	landingMCPRect image.Rectangle
 
 	// sidebar text selection
-	sidebarTextRect image.Rectangle // screen rect of title+id+cwd block
-	sidebarTextContent string       // rendered content for text extraction
+	sidebarTextRect    image.Rectangle // screen rect of title+id+cwd block
+	sidebarTextContent string          // rendered content for text extraction
 	sidebarMouseDown   bool
 	sidebarSelStart    [2]int // [line, col]
 	sidebarSelEnd      [2]int
@@ -776,14 +775,6 @@ func (m *UI) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 	case pubsub.Event[permission.PermissionNotification]:
 		m.handlePermissionNotification(msg.Payload)
-	case pubsub.Event[askuser.QuestionRequest]:
-		m.openAskUserDialog(msg.Payload)
-		if cmd := m.sendNotification(notification.Notification{
-			Title:   "Crush is waiting...",
-			Message: "Agent has a question for you",
-		}); cmd != nil {
-			cmds = append(cmds, cmd)
-		}
 	case cancelTimerExpiredMsg:
 		m.isCanceling = false
 	case tea.TerminalVersionMsg:
@@ -1761,10 +1752,6 @@ func (m *UI) handleDialogMsg(msg tea.Msg) tea.Cmd {
 		case dialog.PermissionDeny:
 			m.com.Workspace.PermissionDeny(msg.Permission)
 		}
-
-	case dialog.ActionAskUserResponse:
-		m.dialog.CloseDialog(dialog.AskUserID)
-		m.com.App.AskUser.Respond(msg.Request.ID, msg.Answers)
 
 	case dialog.ActionFilePickerSelected:
 		cmds = append(cmds, tea.Sequence(
@@ -3799,21 +3786,6 @@ func (m *UI) openPermissionsDialog(perm permission.PermissionRequest) tea.Cmd {
 	return nil
 }
 
-// openAskUserDialog opens the ask_user dialog for an agent question.
-func (m *UI) openAskUserDialog(req askuser.QuestionRequest) {
-	// If the dialog for this exact request is already open, don't recreate it
-	// — the retry ticker in askuser.Service re-publishes every 500ms and
-	// recreating the dialog would wipe the user's in-progress input.
-	if d := m.dialog.Dialog(dialog.AskUserID); d != nil {
-		if askDlg, ok := d.(*dialog.AskUser); ok && askDlg.RequestID() == req.ID {
-			return
-		}
-	}
-	m.dialog.CloseDialog(dialog.AskUserID)
-	askDialog := dialog.NewAskUser(m.com, req)
-	m.dialog.OpenDialog(askDialog)
-}
-
 // handlePermissionNotification updates tool items when permission state changes.
 func (m *UI) handlePermissionNotification(notification permission.PermissionNotification) {
 	toolItem := m.chat.MessageItem(notification.ToolCallID)
@@ -4267,7 +4239,6 @@ func (m *UI) copyChatHighlight() tea.Cmd {
 		},
 	)
 }
-
 
 func (m *UI) enableDockerMCP() tea.Msg {
 	ctx := context.Background()

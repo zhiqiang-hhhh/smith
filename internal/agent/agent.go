@@ -1095,7 +1095,7 @@ If not, please feel free to ignore. Again do not mention this message to the use
 // repairOrphanedToolCalls scans the message history for assistant tool_use
 // blocks that have no corresponding tool_result and injects synthetic error
 // results so the provider API does not reject the request with a 400.
-// This can happen when the app exits while a tool (e.g. ask_user) is waiting
+// This can happen when the app exits while a tool (e.g. bash) is waiting
 // for input — the tool_use is persisted but the tool_result is not.
 func repairOrphanedToolCalls(history []fantasy.Message) []fantasy.Message {
 	// First pass: find which assistant messages have orphaned tool calls.

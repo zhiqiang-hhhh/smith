@@ -22,7 +22,6 @@ import (
 	"github.com/charmbracelet/crush/internal/agent"
 	"github.com/charmbracelet/crush/internal/agent/notify"
 	"github.com/charmbracelet/crush/internal/agent/tools/mcp"
-	"github.com/charmbracelet/crush/internal/askuser"
 	"github.com/charmbracelet/crush/internal/config"
 	"github.com/charmbracelet/crush/internal/db"
 	"github.com/charmbracelet/crush/internal/event"
@@ -58,7 +57,6 @@ type App struct {
 	History     history.Service
 	Permissions permission.Service
 	FileTracker filetracker.Service
-	AskUser     askuser.Service
 
 	AgentCoordinator agent.Coordinator
 
@@ -98,7 +96,6 @@ func New(ctx context.Context, conn *sql.DB, store *config.ConfigStore) (*App, er
 		History:     files,
 		Permissions: permission.NewPermissionService(store.WorkingDir(), skipPermissionsRequests, allowedTools, autoApproveWorkingDir),
 		FileTracker: filetracker.NewService(q),
-		AskUser:     askuser.NewService(),
 		LSPManager:  lsp.NewManager(store),
 
 		globalCtx: ctx,
@@ -486,7 +483,6 @@ func (app *App) setupEvents() {
 	setupSubscriber(ctx, app.serviceEventsWG, "permissions", app.Permissions.Subscribe, app.events)
 	setupSubscriber(ctx, app.serviceEventsWG, "permissions-notifications", app.Permissions.SubscribeNotifications, app.events)
 	setupSubscriber(ctx, app.serviceEventsWG, "history", app.History.Subscribe, app.events)
-	setupSubscriber(ctx, app.serviceEventsWG, "askuser", app.AskUser.Subscribe, app.events)
 	setupSubscriber(ctx, app.serviceEventsWG, "agent-notifications", app.agentNotifications.Subscribe, app.events)
 	setupSubscriber(ctx, app.serviceEventsWG, "mcp", mcp.SubscribeEvents, app.events)
 	setupSubscriber(ctx, app.serviceEventsWG, "lsp", SubscribeLSPEvents, app.events)
@@ -559,7 +555,6 @@ func (app *App) InitCoderAgent(ctx context.Context) error {
 		app.Sessions,
 		app.Messages,
 		app.Permissions,
-		app.AskUser,
 		app.History,
 		app.FileTracker,
 		app.LSPManager,

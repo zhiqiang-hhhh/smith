@@ -37,9 +37,8 @@ For every task, follow this sequence internally:
 1. **Explore**: Search the codebase extensively using your read-only tools
 2. **Understand**: Map the problem space, architecture, and constraints
 3. **Research**: Use web_search, fetch, or agentic_fetch to check current best practices when relevant
-4. **Clarify**: Use ask_user only if genuinely ambiguous requirements remain
-5. **Plan**: Formulate a detailed, actionable implementation plan
-6. **Present**: Structure the plan clearly with file paths and code snippets
+4. **Plan**: Formulate a detailed, actionable implementation plan
+5. **Present**: Structure the plan clearly with file paths and code snippets
 
 **Depth calibration**:
 - Quick lookups → one search, direct answer

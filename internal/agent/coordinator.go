@@ -22,7 +22,6 @@ import (
 	"github.com/charmbracelet/crush/internal/agent/notify"
 	"github.com/charmbracelet/crush/internal/agent/prompt"
 	"github.com/charmbracelet/crush/internal/agent/tools"
-	"github.com/charmbracelet/crush/internal/askuser"
 	"github.com/charmbracelet/crush/internal/config"
 	"github.com/charmbracelet/crush/internal/filetracker"
 	"github.com/charmbracelet/crush/internal/history"
@@ -82,16 +81,15 @@ type coordinator struct {
 	sessions    session.Service
 	messages    message.Service
 	permissions permission.Service
-	askuser     askuser.Service
 	history     history.Service
 	filetracker filetracker.Service
 	lspManager  *lsp.Manager
 	notify      pubsub.Publisher[notify.Notification]
 
-	agentMu        sync.RWMutex
-	currentAgent   SessionAgent
-	activeAgentID  string
-	agents         map[string]SessionAgent
+	agentMu       sync.RWMutex
+	currentAgent  SessionAgent
+	activeAgentID string
+	agents        map[string]SessionAgent
 
 	readyWg errgroup.Group
 }
@@ -102,7 +100,6 @@ func NewCoordinator(
 	sessions session.Service,
 	messages message.Service,
 	permissions permission.Service,
-	askuser askuser.Service,
 	history history.Service,
 	filetracker filetracker.Service,
 	lspManager *lsp.Manager,
@@ -113,7 +110,6 @@ func NewCoordinator(
 		sessions:    sessions,
 		messages:    messages,
 		permissions: permissions,
-		askuser:     askuser,
 		history:     history,
 		filetracker: filetracker,
 		lspManager:  lspManager,
@@ -542,7 +538,6 @@ func (c *coordinator) buildTools(ctx context.Context, agent config.Agent) ([]fan
 	}
 
 	allTools = append(allTools,
-		tools.NewAskUserTool(c.askuser),
 		bashTool,
 		tools.NewJobOutputTool(),
 		tools.NewJobKillTool(),

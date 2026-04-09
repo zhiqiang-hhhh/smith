@@ -660,7 +660,7 @@ func TestRepairOrphanedToolCalls(t *testing.T) {
 		history := []fantasy.Message{
 			{Role: fantasy.MessageRoleUser, Content: []fantasy.MessagePart{fantasy.TextPart{Text: "hello"}}},
 			{Role: fantasy.MessageRoleAssistant, Content: []fantasy.MessagePart{
-				fantasy.ToolCallPart{ToolCallID: "tc1", ToolName: "ask_user", Input: "{}"},
+				fantasy.ToolCallPart{ToolCallID: "tc1", ToolName: "bash", Input: "{}"},
 			}},
 			// No tool result — simulates interrupted session.
 			{Role: fantasy.MessageRoleUser, Content: []fantasy.MessagePart{fantasy.TextPart{Text: "continue"}}},
@@ -700,7 +700,7 @@ func TestRepairOrphanedToolCalls(t *testing.T) {
 		history := []fantasy.Message{
 			{Role: fantasy.MessageRoleAssistant, Content: []fantasy.MessagePart{
 				fantasy.ToolCallPart{ToolCallID: "tc1", ToolName: "bash", Input: "{}"},
-				fantasy.ToolCallPart{ToolCallID: "tc2", ToolName: "ask_user", Input: "{}"},
+				fantasy.ToolCallPart{ToolCallID: "tc2", ToolName: "edit", Input: "{}"},
 			}},
 			{Role: fantasy.MessageRoleTool, Content: []fantasy.MessagePart{
 				fantasy.ToolResultPart{ToolCallID: "tc1", Output: fantasy.ToolResultOutputContentText{Text: "done"}},
@@ -737,7 +737,7 @@ func TestRepairOrphanedToolCalls(t *testing.T) {
 		history := []fantasy.Message{
 			{Role: fantasy.MessageRoleUser, Content: []fantasy.MessagePart{fantasy.TextPart{Text: "hello"}}},
 			{Role: fantasy.MessageRoleAssistant, Content: []fantasy.MessagePart{
-				fantasy.ToolCallPart{ToolCallID: "tc1", ToolName: "ask_user", Input: "{}"},
+				fantasy.ToolCallPart{ToolCallID: "tc1", ToolName: "bash", Input: "{}"},
 			}},
 		}
 		result := repairOrphanedToolCalls(history)
