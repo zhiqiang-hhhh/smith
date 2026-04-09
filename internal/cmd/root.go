@@ -131,28 +131,6 @@ crush --continue
 			}
 		}
 
-		// Default behavior (no --session, no --continue): resume the most
-		// recent session in the current directory. If cwd is the user's
-		// home directory, fall back to the globally most recent session.
-		if sessionID == "" && !continueLast {
-			cwd, _ := os.Getwd()
-			home, _ := os.UserHomeDir()
-			if cwd == home {
-				if best, ok := resolveGlobalLatestSession(); ok {
-					if best.AbsProjectPath != cwd {
-						if err := os.Chdir(best.AbsProjectPath); err == nil {
-							_ = cmd.Flags().Set("cwd", best.AbsProjectPath)
-						}
-					}
-					sessionID = best.SessionID
-				}
-			} else {
-				if best, ok := resolveLocalLatestSession(cwd); ok {
-					sessionID = best.SessionID
-				}
-			}
-		}
-
 		ws, cleanup, err := setupWorkspaceWithProgressBar(cmd)
 		if err != nil {
 			return err
