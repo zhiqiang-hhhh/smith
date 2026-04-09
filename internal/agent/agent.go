@@ -53,10 +53,14 @@ import (
 const (
 	DefaultSessionName = "Untitled Session"
 
-	// Constants for auto-summarization thresholds
-	largeContextWindowThreshold = 200_000
-	largeContextWindowBuffer    = 20_000
-	smallContextWindowRatio     = 0.2
+	// autoSummarizeBufferTokens is the buffer reserved below the effective
+	// context window (context window minus max output tokens) to trigger
+	// auto-summarization. Modeled after claude-code's AUTOCOMPACT_BUFFER_TOKENS.
+	autoSummarizeBufferTokens = 13_000
+
+	// maxOutputTokensReserve is the maximum output tokens to reserve when
+	// calculating the effective context window for auto-summarization.
+	maxOutputTokensReserve = 20_000
 
 	// maxToolResultSize is the maximum character length for a single tool
 	// result before it gets truncated when sent to the LLM. This acts as a
@@ -76,6 +80,11 @@ var userAgent = fmt.Sprintf("Charm-Crush/%s (https://charm.land/crush)", version
 // maxAutoSummarizeDepth limits recursive auto-summarize attempts to prevent
 // unbounded loops when summarization fails to reduce context.
 const maxAutoSummarizeDepth = 3
+
+// autoSummarizeContinuationPrompt is the prompt sent to the model after
+// auto-summarization to resume work. It instructs the model to continue
+// directly without acknowledging the summary or asking questions.
+const autoSummarizeContinuationPrompt = `The conversation was automatically summarized because the context got too long. The summary above contains the full conversation state including any tool results and user answers. Continue the conversation from where it left off without asking the user any further questions. Resume directly — do not acknowledge the summary, do not recap what was happening, do not preface with "I'll continue" or similar. Pick up the last task as if the break never happened.`
 
 //go:embed templates/title.md
 var titlePrompt []byte
@@ -142,9 +151,9 @@ type sessionAgent struct {
 	sessions             session.Service
 	messages             message.Service
 	fileTracker          filetracker.Service
-	disableAutoSummarize  bool
+	disableAutoSummarize bool
 	maxTokensToSummarize int64
-	autoTitle             bool
+	autoTitle            bool
 	isYolo               bool
 	dataDir              string
 	notify               pubsub.Publisher[notify.Notification]
@@ -188,9 +197,9 @@ func NewSessionAgent(
 		sessions:             opts.Sessions,
 		messages:             opts.Messages,
 		fileTracker:          opts.FileTracker,
-		disableAutoSummarize:  opts.DisableAutoSummarize,
+		disableAutoSummarize: opts.DisableAutoSummarize,
 		maxTokensToSummarize: opts.MaxTokensToSummarize,
-		autoTitle:             opts.AutoTitle,
+		autoTitle:            opts.AutoTitle,
 		tools:                csync.NewSliceFrom(opts.Tools),
 		isYolo:               opts.IsYolo,
 		dataDir:              opts.DataDir,
@@ -280,13 +289,14 @@ func (a *sessionAgent) Run(ctx context.Context, call SessionAgentCall) (*fantasy
 		return nil, fmt.Errorf("failed to get session: %w", err)
 	}
 
-	// Pre-flight summarize: when maxTokensToSummarize is configured, check
-	// current token usage *before* sending to the LLM. If the threshold is
-	// already reached, summarize first then replay the user message with
-	// fresh context.
-	if a.maxTokensToSummarize > 0 && !a.disableAutoSummarize && !a.circuitBreaker.isTripped(call.SessionID) {
+	// Pre-flight summarize: check current token usage *before* sending
+	// to the LLM. If the threshold is reached, summarize first then
+	// replay the user message with fresh context. Uses effective context
+	// window calculation that reserves space for output tokens.
+	summarizeThreshold := a.autoSummarizeThreshold(largeModel)
+	if summarizeThreshold > 0 && !a.disableAutoSummarize && !a.circuitBreaker.isTripped(call.SessionID) {
 		tokens := currentSession.CompletionTokens + currentSession.PromptTokens
-		if tokens >= a.maxTokensToSummarize {
+		if tokens >= summarizeThreshold {
 			if call.autoSummarizeDepth >= maxAutoSummarizeDepth {
 				slog.Warn("Skipping pre-flight auto-summarize, max depth reached",
 					"session_id", call.SessionID,
@@ -296,7 +306,7 @@ func (a *sessionAgent) Run(ctx context.Context, call SessionAgentCall) (*fantasy
 				slog.Info("Pre-flight auto-summarize triggered",
 					"session_id", call.SessionID,
 					"used_tokens", tokens,
-					"threshold", a.maxTokensToSummarize,
+					"threshold", summarizeThreshold,
 				)
 				if summarizeErr := a.Summarize(ctx, call.SessionID, call.ProviderOptions); summarizeErr != nil {
 					a.circuitBreaker.recordFailure(call.SessionID)
@@ -433,11 +443,11 @@ func (a *sessionAgent) Run(ctx context.Context, call SessionAgentCall) (*fantasy
 
 			var assistantMsg message.Message
 			assistantMsg, err = a.messages.Create(callContext, call.SessionID, message.CreateMessageParams{
-				Role:       message.Assistant,
-				Parts:      []message.ContentPart{},
-				Model:      largeModel.ModelCfg.Model,
-				Provider:   largeModel.ModelCfg.Provider,
-				})
+				Role:     message.Assistant,
+				Parts:    []message.ContentPart{},
+				Model:    largeModel.ModelCfg.Model,
+				Provider: largeModel.ModelCfg.Provider,
+			})
 			if err != nil {
 				return callContext, prepared, err
 			}
@@ -582,16 +592,8 @@ func (a *sessionAgent) Run(ctx context.Context, call SessionAgentCall) (*fantasy
 				sessionLock.Lock()
 				tokens := currentSession.CompletionTokens + currentSession.PromptTokens
 				sessionLock.Unlock()
-				cw := int64(largeModel.CatwalkCfg.ContextWindow)
-				remaining := cw - tokens
-				var shouldTrigger bool
-				if a.maxTokensToSummarize > 0 {
-					shouldTrigger = tokens >= a.maxTokensToSummarize
-				} else if cw > largeContextWindowThreshold {
-					shouldTrigger = remaining <= largeContextWindowBuffer
-				} else {
-					shouldTrigger = remaining <= int64(float64(cw)*smallContextWindowRatio)
-				}
+				threshold := a.autoSummarizeThreshold(largeModel)
+				shouldTrigger := threshold > 0 && tokens >= threshold
 				if shouldTrigger && !a.disableAutoSummarize && !a.circuitBreaker.isTripped(call.SessionID) {
 					shouldSummarize = true
 					return true
@@ -626,7 +628,7 @@ func (a *sessionAgent) Run(ctx context.Context, call SessionAgentCall) (*fantasy
 				return nil, fmt.Errorf("context too large and auto-summarize failed: %w", summarizeErr)
 			}
 			a.circuitBreaker.recordSuccess(call.SessionID)
-			call.Prompt = "The conversation was automatically summarized because the context got too long. The summary above contains the full conversation state including any tool results and user answers. Please continue where you left off."
+			call.Prompt = autoSummarizeContinuationPrompt
 			call.autoSummarizeDepth++
 			return a.Run(ctx, call)
 		}
@@ -769,7 +771,7 @@ func (a *sessionAgent) Run(ctx context.Context, call SessionAgentCall) (*fantasy
 			a.circuitBreaker.recordSuccess(call.SessionID)
 			// If the agent wasn't done, continue with fresh context.
 			if len(currentAssistant.ToolCalls()) > 0 {
-				call.Prompt = "The conversation was automatically summarized because the context got too long. The summary above contains the full conversation state including any tool results and user answers. Please continue where you left off."
+				call.Prompt = autoSummarizeContinuationPrompt
 				call.autoSummarizeDepth++
 				return a.Run(ctx, call)
 			}
@@ -860,6 +862,11 @@ func (a *sessionAgent) Summarize(ctx context.Context, sessionID string, opts fan
 	// tool results for context — older ones are already captured in the
 	// conversation flow.
 	aiMsgs = clearToolResultsKeeping(aiMsgs, keepRecentToolResultsAfterIdle)
+
+	// Strip binary content (images, documents) before sending to the
+	// summary model. Images waste tokens in the summary call and are not
+	// needed for generating a text summary.
+	aiMsgs = stripBinaryFromMessages(aiMsgs)
 
 	agent := fantasy.NewAgent(summaryModel.Model,
 		fantasy.WithSystemPrompt(string(summaryPrompt)),
@@ -1211,9 +1218,12 @@ func (a *sessionAgent) getSessionMessages(ctx context.Context, session session.S
 		if summaryMsgIndex != -1 {
 			msgs = msgs[summaryMsgIndex:]
 			// Copy the summary message before changing its role so we
-			// don't mutate the original slice element.
+			// don't mutate the original slice element. Wrap the summary
+			// text with context preamble so the model understands this
+			// is a continuation of a previous conversation.
 			summaryMsg := msgs[0]
 			summaryMsg.Role = message.User
+			summaryMsg.StripTextContent(wrapSummaryMessage)
 			msgs[0] = summaryMsg
 		}
 	}
@@ -1498,6 +1508,36 @@ func (a *sessionAgent) SummaryModel() Model {
 	return a.largeModel.Get()
 }
 
+// autoSummarizeThreshold returns the token count at which auto-summarization
+// should be triggered. If maxTokensToSummarize is explicitly configured, it
+// takes precedence. Otherwise, the threshold is calculated as:
+//
+//	effectiveContextWindow - autoSummarizeBufferTokens
+//
+// where effectiveContextWindow = contextWindow - min(maxOutputTokens, maxOutputTokensReserve).
+// This reserves headroom for both the model's output and a safety buffer,
+// matching the approach used by claude-code's autocompact threshold.
+// Returns 0 if auto-summarization should not be triggered.
+func (a *sessionAgent) autoSummarizeThreshold(model Model) int64 {
+	if a.maxTokensToSummarize > 0 {
+		return a.maxTokensToSummarize
+	}
+	cw := int64(model.CatwalkCfg.ContextWindow)
+	if cw <= 0 {
+		return 0
+	}
+	maxOut := int64(model.CatwalkCfg.DefaultMaxTokens)
+	if maxOut > maxOutputTokensReserve {
+		maxOut = maxOutputTokensReserve
+	}
+	effective := cw - maxOut
+	threshold := effective - autoSummarizeBufferTokens
+	if threshold <= 0 {
+		return 0
+	}
+	return threshold
+}
+
 func (a *sessionAgent) SetTools(tools []fantasy.AgentTool) {
 	a.tools.SetSlice(tools)
 }
@@ -1690,6 +1730,91 @@ func buildSummaryPrompt(dataDir string, sessionID string, todos []session.Todo, 
 	}
 
 	return sb.String()
+}
+
+// wrapSummaryMessage wraps summary text with a preamble that tells the model
+// this is a continuation of a previous conversation. This matches the pattern
+// from claude-code's getCompactUserSummaryMessage.
+func wrapSummaryMessage(summary string) string {
+	return "This session is being continued from a previous conversation that ran out of context. The summary below covers the earlier portion of the conversation.\n\n" + summary
+}
+
+// stripBinaryFromMessages creates copies of messages with binary content
+// (images, documents) replaced by text markers. This reduces the token cost
+// of the summary API call since images are not needed for generating a
+// conversation summary. Handles both user-attached files (FilePart) and
+// media in tool results (ToolResultOutputContentMedia).
+func stripBinaryFromMessages(messages []fantasy.Message) []fantasy.Message {
+	result := make([]fantasy.Message, len(messages))
+	for i, msg := range messages {
+		switch msg.Role {
+		case fantasy.MessageRoleUser:
+			hasBinary := false
+			for _, part := range msg.Content {
+				if _, ok := fantasy.AsMessagePart[fantasy.FilePart](part); ok {
+					hasBinary = true
+					break
+				}
+			}
+			if !hasBinary {
+				result[i] = msg
+				continue
+			}
+			newContent := make([]fantasy.MessagePart, 0, len(msg.Content))
+			for _, part := range msg.Content {
+				if fp, ok := fantasy.AsMessagePart[fantasy.FilePart](part); ok {
+					newContent = append(newContent, fantasy.TextPart{
+						Text: fmt.Sprintf("[%s file: %s]", fp.MediaType, fp.Filename),
+					})
+				} else {
+					newContent = append(newContent, part)
+				}
+			}
+			result[i] = fantasy.Message{
+				Role:            msg.Role,
+				Content:         newContent,
+				ProviderOptions: msg.ProviderOptions,
+			}
+
+		case fantasy.MessageRoleTool:
+			hasMedia := false
+			for _, part := range msg.Content {
+				if tr, ok := fantasy.AsMessagePart[fantasy.ToolResultPart](part); ok {
+					if _, ok := fantasy.AsToolResultOutputType[fantasy.ToolResultOutputContentMedia](tr.Output); ok {
+						hasMedia = true
+						break
+					}
+				}
+			}
+			if !hasMedia {
+				result[i] = msg
+				continue
+			}
+			newContent := make([]fantasy.MessagePart, 0, len(msg.Content))
+			for _, part := range msg.Content {
+				tr, ok := fantasy.AsMessagePart[fantasy.ToolResultPart](part)
+				if !ok {
+					newContent = append(newContent, part)
+					continue
+				}
+				if media, ok := fantasy.AsToolResultOutputType[fantasy.ToolResultOutputContentMedia](tr.Output); ok {
+					tr.Output = fantasy.ToolResultOutputContentText{
+						Text: fmt.Sprintf("[%s media content]", media.MediaType),
+					}
+				}
+				newContent = append(newContent, tr)
+			}
+			result[i] = fantasy.Message{
+				Role:            msg.Role,
+				Content:         newContent,
+				ProviderOptions: msg.ProviderOptions,
+			}
+
+		default:
+			result[i] = msg
+		}
+	}
+	return result
 }
 
 // serializeTranscript converts a slice of messages to a searchable markdown
