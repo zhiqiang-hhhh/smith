@@ -1307,12 +1307,19 @@ func (a *sessionAgent) generateTitle(ctx context.Context, sessionID string, msgs
 
 	// Clean up title.
 	var title string
-	title = strings.ReplaceAll(resp.Response.Content.Text(), "\n", " ")
+	title = strings.ReplaceAll(resp.Response.Content.Text(), "\n", "\n")
 
 	// Remove thinking tags if present.
 	title = thinkTagRegex.ReplaceAllString(title, "")
-
 	title = strings.TrimSpace(title)
+
+	// Parse two-line response: line 1 = title, line 2 = short title.
+	var shortTitle string
+	if parts := strings.SplitN(title, "\n", 2); len(parts) == 2 {
+		title = strings.TrimSpace(parts[0])
+		shortTitle = strings.TrimSpace(parts[1])
+	}
+
 	title = cmp.Or(title, DefaultSessionName)
 
 	// Calculate usage and cost.
@@ -1343,7 +1350,7 @@ func (a *sessionAgent) generateTitle(ctx context.Context, sessionID string, msgs
 	// tokens because they reflect the title model's input (the full conversation
 	// history) and would inflate the session's context-usage counters, undoing
 	// any token reset performed by Summarize().
-	saveErr := a.sessions.UpdateTitleAndUsage(ctx, sessionID, title, 0, 0, cost)
+	saveErr := a.sessions.UpdateTitleAndUsage(ctx, sessionID, title, shortTitle, 0, 0, cost)
 	if saveErr != nil {
 		slog.Error("Failed to save session title and usage", "error", saveErr)
 		return

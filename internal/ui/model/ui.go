@@ -3336,11 +3336,14 @@ func (m *UI) syncTmuxPaneTitle() {
 	if !m.com.Mux.Available() || m.session == nil {
 		return
 	}
-	title := m.session.Title
+	title := m.session.ShortTitle
+	if title == "" {
+		title = m.session.Title
+	}
 	if title == "" || title == "New Session" {
 		return
 	}
-	m.com.Mux.SetPaneTitle("CC " + title)
+	m.com.Mux.SetPaneTitle(title)
 }
 
 // mimeOf detects the MIME type of the given content.

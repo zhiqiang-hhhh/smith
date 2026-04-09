@@ -52,6 +52,7 @@ type Session struct {
 	ID               string
 	ParentSessionID  string
 	Title            string
+	ShortTitle       string // Short label for tmux pane title (not persisted).
 	MessageCount     int64
 	PromptTokens     int64
 	CompletionTokens int64
@@ -71,7 +72,7 @@ type Service interface {
 	GetLast(ctx context.Context) (Session, error)
 	List(ctx context.Context) ([]Session, error)
 	Save(ctx context.Context, session Session) (Session, error)
-	UpdateTitleAndUsage(ctx context.Context, sessionID, title string, promptTokens, completionTokens int64, cost float64) error
+	UpdateTitleAndUsage(ctx context.Context, sessionID, title, shortTitle string, promptTokens, completionTokens int64, cost float64) error
 	Rename(ctx context.Context, id string, title string) error
 	Delete(ctx context.Context, id string) error
 
@@ -322,7 +323,7 @@ func (s *service) Save(ctx context.Context, session Session) (Session, error) {
 
 // UpdateTitleAndUsage updates only the title and usage fields atomically.
 // This is safer than fetching, modifying, and saving the entire session.
-func (s *service) UpdateTitleAndUsage(ctx context.Context, sessionID, title string, promptTokens, completionTokens int64, cost float64) error {
+func (s *service) UpdateTitleAndUsage(ctx context.Context, sessionID, title, shortTitle string, promptTokens, completionTokens int64, cost float64) error {
 	err := s.q.UpdateSessionTitleAndUsage(ctx, db.UpdateSessionTitleAndUsageParams{
 		ID:               sessionID,
 		Title:            title,
@@ -340,7 +341,9 @@ func (s *service) UpdateTitleAndUsage(ctx context.Context, sessionID, title stri
 		slog.Error("Failed to get session after rename", "error", err, "sessionID", sessionID)
 		return nil // Title was saved; log but don't fail.
 	}
-	s.Publish(pubsub.UpdatedEvent, s.fromDBItem(dbSession))
+	sess := s.fromDBItem(dbSession)
+	sess.ShortTitle = shortTitle
+	s.Publish(pubsub.UpdatedEvent, sess)
 	return nil
 }
 
