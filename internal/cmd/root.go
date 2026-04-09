@@ -101,6 +101,14 @@ crush --session {session-id}
 crush --continue
   `,
 	RunE: func(cmd *cobra.Command, args []string) error {
+		sessionID, _ := cmd.Flags().GetString("session")
+		continueLast, _ := cmd.Flags().GetBool("continue")
+		var err error
+		sessionID, continueLast, err = prepareInteractiveStartup(cmd, sessionID, continueLast)
+		if err != nil {
+			return err
+		}
+
 		noTmux, _ := cmd.Flags().GetBool("no-tmux")
 		if !noTmux && shouldAutoTmux() {
 			cwd, err := requestedCwd(cmd, os.Getwd)
@@ -116,30 +124,18 @@ crush --continue
 			}
 		}
 
-		sessionID, _ := cmd.Flags().GetString("session")
-		continueLast, _ := cmd.Flags().GetBool("continue")
-
-		// When --continue is requested, resolve the globally most recent
-		// session across all projects *before* initializing the workspace.
-		// This ensures the workspace is created for the correct project dir.
-		if continueLast && sessionID == "" {
-			if best, ok := resolveGlobalLatestSession(); ok {
-				cwd, _ := os.Getwd()
-				if best.AbsProjectPath != cwd {
-					if err := os.Chdir(best.AbsProjectPath); err == nil {
-						_ = cmd.Flags().Set("cwd", best.AbsProjectPath)
-					}
-				}
-				sessionID = best.SessionID
-				continueLast = false
-			}
-		}
-
 		ws, cleanup, err := setupWorkspaceWithProgressBar(cmd)
 		if err != nil {
 			return err
 		}
 		defer cleanup()
+
+		if sessionID == "" && !continueLast {
+			continueLast, err = shouldContinueMostRecentLocalSession(cmd.Context(), ws.ListSessions)
+			if err != nil {
+				return err
+			}
+		}
 
 		if sessionID != "" {
 			sess, err := resolveWorkspaceSessionID(cmd.Context(), ws, sessionID)
@@ -274,6 +270,13 @@ func setupWorkspace(cmd *cobra.Command) (workspace.Workspace, func(), error) {
 	return setupLocalWorkspace(cmd)
 }
 
+func hasExplicitStartupTarget(cmd *cobra.Command) bool {
+	return cmd.Flags().Changed("cwd") ||
+		cmd.Flags().Changed("data-dir") ||
+		cmd.Flags().Changed("session") ||
+		cmd.Flags().Changed("continue")
+}
+
 func requestedCwd(cmd *cobra.Command, getwd func() (string, error)) (string, error) {
 	cwd, _ := cmd.Flags().GetString("cwd")
 	if cwd == "" {
@@ -288,6 +291,55 @@ func requestedCwd(cmd *cobra.Command, getwd func() (string, error)) (string, err
 		return "", err
 	}
 	return filepath.Clean(abs), nil
+}
+
+func samePath(a, b string) bool {
+	if a == "" || b == "" {
+		return false
+	}
+	return filepath.Clean(a) == filepath.Clean(b)
+}
+
+func prepareInteractiveStartup(cmd *cobra.Command, sessionID string, continueLast bool) (string, bool, error) {
+	cwd, err := requestedCwd(cmd, os.Getwd)
+	if err != nil {
+		return "", false, err
+	}
+	if homeDir, err := os.UserHomeDir(); err == nil && samePath(cwd, homeDir) && !hasExplicitStartupTarget(cmd) {
+		if best, ok := resolveGlobalLatestSessionExcept(homeDir); ok {
+			if !samePath(best.AbsProjectPath, cwd) {
+				_ = cmd.Flags().Set("cwd", best.AbsProjectPath)
+			}
+			_ = cmd.Flags().Set("session", best.SessionID)
+			return best.SessionID, false, nil
+		}
+		return "", false, fmt.Errorf("home directory cannot be used as a crush project without an explicit startup flag such as --cwd, --data-dir, --session, or --continue")
+	}
+
+	// When --continue is requested, resolve the globally most recent
+	// session across all projects *before* initializing the workspace.
+	// This ensures the workspace is created for the correct project dir.
+	if continueLast && sessionID == "" {
+		if best, ok := resolveGlobalLatestSession(); ok {
+			if !samePath(best.AbsProjectPath, cwd) {
+				if err := os.Chdir(best.AbsProjectPath); err == nil {
+					_ = cmd.Flags().Set("cwd", best.AbsProjectPath)
+				}
+			}
+			_ = cmd.Flags().Set("session", best.SessionID)
+			return best.SessionID, false, nil
+		}
+	}
+
+	return sessionID, continueLast, nil
+}
+
+func shouldContinueMostRecentLocalSession(ctx context.Context, listSessions func(context.Context) ([]session.Session, error)) (bool, error) {
+	sessions, err := listSessions(ctx)
+	if err != nil {
+		return false, err
+	}
+	return len(sessions) > 0, nil
 }
 
 // setupLocalWorkspace creates an in-process app.App and wraps it in an
@@ -673,24 +725,40 @@ var defaultGitIgnore string
 // resolveGlobalLatestSession finds the most recently updated session
 // across all registered projects.
 func resolveGlobalLatestSession() (search.SearchResult, bool) {
+	return resolveGlobalLatestSessionExcept("")
+}
+
+func resolveGlobalLatestSessionExcept(excludedPath string) (search.SearchResult, bool) {
 	projs, err := projects.List()
 	if err != nil || len(projs) == 0 {
 		return search.SearchResult{}, false
 	}
 	var searchProjs []search.Project
 	for _, p := range projs {
+		if samePath(p.Path, excludedPath) {
+			continue
+		}
 		searchProjs = append(searchProjs, search.Project{Path: p.Path, DataDir: p.DataDir})
+	}
+	if len(searchProjs) == 0 {
+		return search.SearchResult{}, false
 	}
 	results, err := search.Search(searchProjs, "")
 	if err != nil || len(results) == 0 {
 		return search.SearchResult{}, false
 	}
-	// Find the one with the highest UpdatedAt.
-	best := results[0]
-	for _, r := range results[1:] {
-		if r.UpdatedAt > best.UpdatedAt {
+	var (
+		best search.SearchResult
+		ok   bool
+	)
+	for _, r := range results {
+		if samePath(r.AbsProjectPath, excludedPath) {
+			continue
+		}
+		if !ok || r.UpdatedAt > best.UpdatedAt {
 			best = r
+			ok = true
 		}
 	}
-	return best, true
+	return best, ok
 }
