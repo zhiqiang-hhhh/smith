@@ -84,7 +84,7 @@ const maxAutoSummarizeDepth = 3
 // autoSummarizeContinuationPrompt is the prompt sent to the model after
 // auto-summarization to resume work. It instructs the model to continue
 // directly without acknowledging the summary or asking questions.
-const autoSummarizeContinuationPrompt = `The conversation was automatically summarized because the context got too long. The summary above contains the full conversation state including any tool results and user answers. Continue the conversation from where it left off without asking the user any further questions. Resume directly — do not acknowledge the summary, do not recap what was happening, do not preface with "I'll continue" or similar. Pick up the last task as if the break never happened.`
+const autoSummarizeContinuationPrompt = `The conversation was automatically summarized because the context got too long. The summary above contains the full conversation state including any tool results and user answers. Continue the conversation from where it left off without asking the user any further questions. Resume directly — do not acknowledge the summary, do not recap what was happening, do not preface with "I'll continue" or similar. Pick up the last task as if the break never happened. IMPORTANT: Continue responding in the same spoken language the user was using before the summary.`
 
 //go:embed templates/title.md
 var titlePrompt []byte
@@ -1061,13 +1061,15 @@ func (a *sessionAgent) preparePrompt(msgs []message.Message, attachments ...mess
 			fmt.Sprintf("<system_reminder>%s</system_reminder>",
 				`This is a reminder that your todo list is currently empty. DO NOT mention this to the user explicitly because they are already aware.
 If you are working on tasks that would benefit from a todo list please use the "todos" tool to create one.
-If not, please feel free to ignore. Again do not mention this message to the user.`,
+If not, please feel free to ignore. Again do not mention this message to the user.
+IMPORTANT: This reminder is in English but you MUST continue responding in the same language the user has been using.`,
 			),
 		))
 		if hasSummary {
 			history = append(history, fantasy.NewUserMessage(
 				fmt.Sprintf("<system_reminder>%s</system_reminder>",
-					`This session was summarized. If you need specific details from before the summary (commands, code, file paths, errors, decisions), use the "memory_search" tool to search the full transcript instead of guessing.`,
+					`This session was summarized. If you need specific details from before the summary (commands, code, file paths, errors, decisions), use the "memory_search" tool to search the full transcript instead of guessing.
+IMPORTANT: This reminder is in English but you MUST continue responding in the same language the user has been using.`,
 				),
 			))
 			if len(msgs) > 0 && a.dataDir != "" {
