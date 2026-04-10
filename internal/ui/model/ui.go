@@ -715,8 +715,9 @@ func (m *UI) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if !prevHasInProgress && hasInProgressTodo(m.session.Todos) {
 				m.todoIsSpinning = true
 				cmds = append(cmds, m.todoSpinner.Tick)
-				m.updateLayoutAndSize()
 			}
+			m.renderPills()
+			m.updateLayoutAndSize()
 		}
 	case pubsub.Event[message.Message]:
 		// Check if this is a child session message for an agent tool.
@@ -750,9 +751,14 @@ func (m *UI) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.todoIsSpinning = true
 			cmds = append(cmds, m.todoSpinner.Tick)
 		}
-		// stop the spinner if the agent is not busy anymore
+		// Stop the spinner if the agent is not busy anymore, and
+		// mark any leftover in-progress todos as completed since the
+		// agent will not update them.
 		if m.todoIsSpinning && !m.isAgentBusy() {
 			m.todoIsSpinning = false
+			if m.hasSession() {
+				m.completeRemainingTodos()
+			}
 		}
 	case pubsub.Event[history.File]:
 		cmds = append(cmds, m.handleFileEvent(msg.Payload))
@@ -3275,6 +3281,25 @@ func isWhitespace(b byte) bool {
 func (m *UI) isAgentBusy() bool {
 	return m.com.Workspace.AgentIsReady() &&
 		m.com.Workspace.AgentIsBusy()
+}
+
+// completeRemainingTodos marks any in-progress or pending todos as completed
+// and persists the change. Called when the agent finishes so stale todos
+// don't linger in the UI.
+func (m *UI) completeRemainingTodos() {
+	changed := false
+	for i := range m.session.Todos {
+		if m.session.Todos[i].Status != session.TodoStatusCompleted {
+			m.session.Todos[i].Status = session.TodoStatusCompleted
+			changed = true
+		}
+	}
+	if changed {
+		m.renderPills()
+		go func() {
+			_, _ = m.com.Workspace.SaveSession(context.TODO(), *m.session)
+		}()
+	}
 }
 
 // hasSession returns true if there is an active session with a valid ID.
