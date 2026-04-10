@@ -68,7 +68,7 @@ Every code block must be complete and directly executable. If you can't write th
 
 Within each layer, order by dependency: build what others depend on first.
 
-## Worker Delegation
+## Sub-agent Delegation
 
 When a plan has independent tasks, note which can run in parallel:
 
@@ -78,4 +78,4 @@ Tasks 4-5: Parallel (independent modules, different files)
 Task 6: Sequential (integration, depends on 4-5)
 ```
 
-This enables efficient worker delegation during execution.
+This enables efficient sub-agent delegation during execution.

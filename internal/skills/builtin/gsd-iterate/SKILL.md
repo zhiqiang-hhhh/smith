@@ -58,7 +58,7 @@ Create fix tasks following the same standards as gsd-plan:
 - **Verify:** Command to prove the gap is closed
 - **Done:** The specific truth from verification that must now pass
 
-**Key difference from initial planning:** Fix tasks reference the verification report. The worker knows WHAT failed and WHY, so the fix is surgical.
+**Key difference from initial planning:** Fix tasks reference the verification report. The sub-agent knows WHAT failed and WHY, so the fix is surgical.
 
 ### Fix Task Sizing
 
@@ -72,12 +72,12 @@ Fix tasks should be smaller than initial tasks:
 
 Same execution protocol as gsd-execute:
 
-- Fresh worker per fix task (zero accumulated context)
+- Fresh sub-agent per fix task (zero accumulated context)
 - Self-contained prompts with the gap analysis included
 - Deviation rules apply (auto-fix bugs, ask about architecture)
 - Two-stage review after each fix
 
-**Critical:** Include the original verification failure in the worker prompt so it knows exactly what was wrong and can verify the fix.
+**Critical:** Include the original verification failure in the sub-agent prompt so it knows exactly what was wrong and can verify the fix.
 
 ## Step 4: Re-Verify
 

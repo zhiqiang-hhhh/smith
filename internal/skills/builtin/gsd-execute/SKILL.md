@@ -1,72 +1,72 @@
 ---
 name: gsd-execute
 agent: gsd
-description: "GSD wave-based execution: dispatch fresh workers per task with deviation rules, atomic verification, and two-stage review. Activate when executing a multi-task plan, building from a spec, or implementing a feature with multiple components."
+description: "GSD wave-based execution: dispatch fresh sub-agents per task with deviation rules, atomic verification, and two-stage review. Activate when executing a multi-task plan, building from a spec, or implementing a feature with multiple components."
 ---
 
 # Wave-Based Execution — The Iron Law
 
-**FRESH WORKER PER TASK. ZERO ACCUMULATED GARBAGE.**
+**FRESH SUB-AGENT PER TASK. ZERO ACCUMULATED GARBAGE.**
 
-Context rot is the #1 cause of quality degradation. Each task gets a fresh worker with zero accumulated context — no stale assumptions, no degraded attention.
+Context rot is the #1 cause of quality degradation. Each task gets a fresh sub-agent with zero accumulated context — no stale assumptions, no degraded attention.
 
 ## Execution Protocol
 
 ### 1. Read the Plan
 
-Before dispatching any worker:
+Before dispatching any sub-agent:
 
 - Parse the wave structure — which tasks are parallel, which are sequential
-- Identify file ownership — no two parallel workers should touch the same file
-- Check for locked decisions from discussion (see gsd-discuss) — workers must honor them
-- Extract interface contracts that workers will need
+- Identify file ownership — no two parallel sub-agents should touch the same file
+- Check for locked decisions from discussion (see gsd-discuss) — sub-agents must honor them
+- Extract interface contracts that sub-agents will need
 
 ### 2. Dispatch by Wave
 
 ```
-Wave 1: Launch all Wave 1 workers in parallel
+Wave 1: Launch all Wave 1 sub-agents in parallel
   ↓ wait for all to complete
   ↓ two-stage review each result
-Wave 2: Launch all Wave 2 workers in parallel
+Wave 2: Launch all Wave 2 sub-agents in parallel
   ↓ wait for all to complete
   ↓ two-stage review each result
 ...continue until all waves done
 ```
 
-### 3. Write Self-Contained Worker Prompts
+### 3. Write Self-Contained Sub-Agent Prompts
 
-The worker has ZERO context about your conversation. Write prompts accordingly:
+The sub-agent has ZERO context about your conversation. Write prompts accordingly:
 
 **Must include:**
 - What to build/change (specific files, functions, behavior)
-- Why (purpose and motivation — workers calibrate depth based on this)
+- Why (purpose and motivation — sub-agents calibrate depth based on this)
 - Constraints (patterns to follow, existing code to match, libraries to use)
-- Interface contracts (types, exports the worker needs — don't make them search)
-- Verification command (how the worker proves the task is done)
+- Interface contracts (types, exports the sub-agent needs — don't make them search)
+- Verification command (how the sub-agent proves the task is done)
 - Relevant file paths and line numbers
 
 **Anti-pattern (lazy delegation):**
 > "Based on your findings, fix the auth bug"
 
-The worker has no findings. It starts fresh.
+The sub-agent has no findings. It starts fresh.
 
 **Good delegation:**
 > "Fix the null pointer in src/auth/validate.ts:42. The `user` field on Session (src/auth/types.ts:15) is undefined when sessions expire but the token remains cached. Add a nil check before accessing user.Email. Write a test in src/auth/validate_test.ts. Run `go test ./internal/auth/`."
 
-### 4. Worker Dispatch Rules
+### 4. Sub-Agent Dispatch Rules
 
 | Situation | Action |
 |-----------|--------|
-| Independent tasks on different files | Launch parallel workers |
+| Independent tasks on different files | Launch parallel sub-agents |
 | Dependent tasks (needs output of prior) | Sequential, one at a time |
-| Same file needs changes | Do it yourself (workers conflict) |
-| Correcting a worker's failure | Do it yourself (you have error context) |
+| Same file needs changes | Do it yourself (sub-agents conflict) |
+| Correcting a sub-agent's failure | Do it yourself (you have error context) |
 | Files already in your context | Do it yourself (faster) |
-| Mechanical/repetitive changes | Spawn workers |
+| Mechanical/repetitive changes | Spawn sub-agents |
 
 ### 5. Two-Stage Review
 
-After each worker completes:
+After each sub-agent completes:
 
 #### Stage 1: Spec Compliance
 - Does the code match the plan? Not more, not less.

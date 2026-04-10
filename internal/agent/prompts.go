@@ -23,9 +23,6 @@ var gsdPromptTmpl []byte
 //go:embed templates/task.md.tpl
 var taskPromptTmpl []byte
 
-//go:embed templates/worker.md.tpl
-var workerPromptTmpl []byte
-
 //go:embed templates/initialize.md.tpl
 var initializePromptTmpl []byte
 
@@ -63,14 +60,6 @@ func gsdPrompt(opts ...prompt.Option) (*prompt.Prompt, error) {
 
 func taskPrompt(opts ...prompt.Option) (*prompt.Prompt, error) {
 	systemPrompt, err := prompt.NewPrompt("task", string(taskPromptTmpl), opts...)
-	if err != nil {
-		return nil, err
-	}
-	return systemPrompt, nil
-}
-
-func workerPrompt(opts ...prompt.Option) (*prompt.Prompt, error) {
-	systemPrompt, err := prompt.NewPrompt("worker", string(workerPromptTmpl), opts...)
 	if err != nil {
 		return nil, err
 	}

@@ -55,7 +55,7 @@ Break the approved design into concrete implementation steps:
 - Each step should be independently testable
 - Order steps to minimize risk (infrastructure first, features second, cleanup last)
 - Include verification commands for each step
-- Identify which steps can be parallelized (for worker delegation)
+- Identify which steps can be parallelized (for sub-agent delegation)
 
 ### 5. Execute
 

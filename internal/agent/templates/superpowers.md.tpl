@@ -43,7 +43,7 @@ The iron laws above are enforced through dedicated skills. Load the full skill w
 
 **Planning** (superpowers-planning): Write plans with exact file paths, complete code, verification commands. No "TBD", "TODO", or "similar to Task N". Every code block must be directly executable.
 
-**Subagent-Driven Development** (superpowers-subagent-dev): Fresh worker per task + two-stage review (spec compliance, then code quality). Write self-contained prompts — workers have zero context.
+**Subagent-Driven Development** (superpowers-subagent-dev): Fresh sub-agent per task + two-stage review (spec compliance, then code quality). Write self-contained prompts — sub-agents have zero context.
 
 **Code Review** (superpowers-code-review): Pre-submission self-review checklist (correctness, quality, security, scope). Structured review process with actionable, categorized feedback.
 </superpowers_methodology>
@@ -278,9 +278,6 @@ After significant changes:
 - Read files before editing
 - Always use absolute paths for file operations (editing, reading, writing)
 - IMPORTANT: Prefer calling tools (Grep, Glob, View, LS) directly over launching an Agent. Only use the Agent tool when you need to run a multi-step exploratory search that would clutter your context with excessive output, or when you want to run multiple independent searches in parallel. If you can accomplish the task in 1-2 tool calls, do it yourself — launching a sub-agent for simple lookups wastes time and tokens.
-- Use Worker tool to delegate self-contained implementation tasks (file edits, refactoring, test writing) — workers have full read/write access and run independently. Launch multiple workers in parallel for independent tasks on different files.
-
-**Worker delegation quality** — when spawning workers, write self-contained prompts with what, which files, why, and constraints. Workers have zero context. For detailed guidance and the decision matrix (when to spawn vs. do it yourself), load the superpowers-subagent-dev skill.
 
 - Run tools in parallel when safe (no dependencies)
 - When making multiple independent bash calls, send them in a single message with multiple tool calls for parallel execution

@@ -490,15 +490,11 @@ func TestConfig_setupAgentsWithDisabledTools(t *testing.T) {
 	coderAgent, ok := cfg.Agents[AgentCoder]
 	require.True(t, ok)
 
-	assert.Equal(t, []string{"agent", "worker", "bash", "crush_info", "crush_logs", "job_output", "job_kill", "multiedit", "fetch", "agentic_fetch", "glob", "ls", "sourcegraph", "todos", "view", "write", "web_search", "diff", "list_mcp_resources", "read_mcp_resource", "memory_search"}, coderAgent.AllowedTools)
+	assert.Equal(t, []string{"agent", "bash", "crush_info", "crush_logs", "job_output", "job_kill", "multiedit", "fetch", "agentic_fetch", "glob", "ls", "sourcegraph", "todos", "view", "write", "web_search", "diff", "list_mcp_resources", "read_mcp_resource", "memory_search"}, coderAgent.AllowedTools)
 
 	taskAgent, ok := cfg.Agents[AgentTask]
 	require.True(t, ok)
 	assert.Equal(t, []string{"glob", "ls", "sourcegraph", "view", "web_search", "diff"}, taskAgent.AllowedTools)
-
-	workerAgent, ok := cfg.Agents[AgentWorker]
-	require.True(t, ok)
-	assert.Equal(t, []string{"bash", "job_output", "job_kill", "multiedit", "fetch", "agentic_fetch", "glob", "ls", "sourcegraph", "view", "write", "web_search", "diff"}, workerAgent.AllowedTools)
 }
 
 func TestConfig_setupAgentsWithEveryReadOnlyToolDisabled(t *testing.T) {
@@ -517,7 +513,7 @@ func TestConfig_setupAgentsWithEveryReadOnlyToolDisabled(t *testing.T) {
 	cfg.SetupAgents()
 	coderAgent, ok := cfg.Agents[AgentCoder]
 	require.True(t, ok)
-	assert.Equal(t, []string{"agent", "worker", "bash", "crush_info", "crush_logs", "job_output", "job_kill", "download", "edit", "multiedit", "fetch", "agentic_fetch", "todos", "write", "web_search", "diff", "list_mcp_resources", "read_mcp_resource", "memory_search"}, coderAgent.AllowedTools)
+	assert.Equal(t, []string{"agent", "bash", "crush_info", "crush_logs", "job_output", "job_kill", "download", "edit", "multiedit", "fetch", "agentic_fetch", "todos", "write", "web_search", "diff", "list_mcp_resources", "read_mcp_resource", "memory_search"}, coderAgent.AllowedTools)
 
 	taskAgent, ok := cfg.Agents[AgentTask]
 	require.True(t, ok)

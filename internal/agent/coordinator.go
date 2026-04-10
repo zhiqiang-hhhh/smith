@@ -521,14 +521,6 @@ func (c *coordinator) buildTools(ctx context.Context, agent config.Agent) ([]fan
 		allTools = append(allTools, agentTool)
 	}
 
-	if slices.Contains(agent.AllowedTools, WorkerToolName) {
-		workerTool, err := c.workerTool(ctx)
-		if err != nil {
-			return nil, err
-		}
-		allTools = append(allTools, workerTool)
-	}
-
 	if slices.Contains(agent.AllowedTools, tools.AgenticFetchToolName) {
 		agenticFetchTool, err := c.agenticFetchTool(ctx, nil)
 		if err != nil {
@@ -1154,9 +1146,18 @@ func (c *coordinator) Summarize(ctx context.Context, sessionID string) error {
 }
 
 func (c *coordinator) isUnauthorized(err error) bool {
+	if err == nil {
+		return false
+	}
 	var providerErr *fantasy.ProviderError
-	return (errors.As(err, &providerErr) && providerErr.StatusCode == http.StatusUnauthorized) ||
-		errors.Is(err, hyper.ErrUnauthorized)
+	if errors.As(err, &providerErr) && providerErr.StatusCode == http.StatusUnauthorized {
+		return true
+	}
+	if errors.Is(err, hyper.ErrUnauthorized) {
+		return true
+	}
+	msg := err.Error()
+	return strings.Contains(msg, "unauthorized") || strings.Contains(msg, "token expired")
 }
 
 func (c *coordinator) refreshOAuth2Token(ctx context.Context, providerCfg config.ProviderConfig) error {
@@ -1225,6 +1226,12 @@ func (c *coordinator) runSubAgent(ctx context.Context, params subAgentParams) (f
 	providerCfg, ok := c.cfg.Config().Providers.Get(model.ModelCfg.Provider)
 	if !ok {
 		return fantasy.ToolResponse{}, errModelProviderNotConfigured
+	}
+
+	if providerCfg.OAuthToken != nil && providerCfg.OAuthToken.IsExpired() {
+		if err := c.refreshOAuth2Token(ctx, providerCfg); err != nil {
+			return fantasy.ToolResponse{}, err
+		}
 	}
 
 	// Run the agent

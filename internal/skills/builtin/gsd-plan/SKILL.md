@@ -8,7 +8,7 @@ description: "GSD spec-driven planning: break work into wave-parallel tasks with
 
 **NO PLANS WITH PLACEHOLDERS OR MISSING DETAILS.**
 
-Plans are prompts, not documents. A PLAN is the worker prompt — specific enough that a fresh agent with zero context executes without guessing.
+Plans are prompts, not documents. A PLAN is the sub-agent prompt — specific enough that a fresh agent with zero context executes without guessing.
 
 ## Context Engineering
 
@@ -21,7 +21,7 @@ Quality degrades as context fills. Plan accordingly:
 | 50-70% | DEGRADING | Shortcuts begin |
 | 70%+ | POOR | Rushed, bugs |
 
-**Rule:** Each worker task should complete within ~50% context. More workers, smaller scope, consistent quality.
+**Rule:** Each sub-agent task should complete within ~50% context. More sub-agents, smaller scope, consistent quality.
 
 ## The Planning Process
 
@@ -112,7 +112,7 @@ When tasks create interfaces consumed by later tasks:
 2. **Middle:** Implement against the contracts
 3. **Last:** Wire — connect implementations to consumers
 
-This prevents workers from exploring the codebase to understand contracts. They receive the contracts in the prompt.
+This prevents sub-agents from exploring the codebase to understand contracts. They receive the contracts in the prompt.
 
 ## The No-Placeholders Rule
 
@@ -154,4 +154,4 @@ Present the plan with wave structure visible:
 - Task 5: [name] — files: [...]
 ```
 
-This enables efficient worker delegation during execution (see gsd-execute).
+This enables efficient sub-agent delegation during execution (see gsd-execute).
