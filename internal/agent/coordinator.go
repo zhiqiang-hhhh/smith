@@ -270,6 +270,9 @@ func (c *coordinator) Run(ctx context.Context, sessionID string, prompt string, 
 				return nil, originalErr
 			}
 			slog.Debug("Retrying request with refreshed OAuth token", "provider", providerCfg.ID)
+			c.agentMu.RLock()
+			agent = c.currentAgent
+			c.agentMu.RUnlock()
 			return run()
 		case strings.Contains(providerCfg.APIKeyTemplate, "$"):
 			slog.Debug("Received 401. Refreshing API Key template and retrying", "provider", providerCfg.ID)
@@ -277,6 +280,9 @@ func (c *coordinator) Run(ctx context.Context, sessionID string, prompt string, 
 				return nil, originalErr
 			}
 			slog.Debug("Retrying request with refreshed API key", "provider", providerCfg.ID)
+			c.agentMu.RLock()
+			agent = c.currentAgent
+			c.agentMu.RUnlock()
 			return run()
 		}
 	}

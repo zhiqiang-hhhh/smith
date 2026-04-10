@@ -17,9 +17,9 @@ func (t *Token) SetExpiresAt() {
 	t.ExpiresAt = time.Now().Add(time.Duration(t.ExpiresIn) * time.Second).Unix()
 }
 
-// IsExpired checks if the token is expired or about to expire (within 10% of its lifetime).
+// IsExpired checks if the token is expired or about to expire (within 5 minutes of expiry).
 func (t *Token) IsExpired() bool {
-	return time.Now().Unix() >= (t.ExpiresAt - int64(t.ExpiresIn)/10)
+	return time.Now().Unix() >= (t.ExpiresAt - 300)
 }
 
 // SetExpiresIn calculates and sets the ExpiresIn field based on the ExpiresAt field.
