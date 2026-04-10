@@ -47,6 +47,8 @@ type DiffView struct {
 	tabWidth        int
 	chromaStyle     *chroma.Style
 
+	wordWrap bool
+
 	isComputed bool
 	err        error
 	unified    udiff.UnifiedDiff
@@ -150,6 +152,12 @@ func (dv *DiffView) Width(width int) *DiffView {
 // XOffset sets the horizontal offset for the DiffView.
 func (dv *DiffView) XOffset(xOffset int) *DiffView {
 	dv.xOffset = xOffset
+	return dv
+}
+
+// WordWrap enables or disables word wrapping for long lines.
+func (dv *DiffView) WordWrap(wrap bool) *DiffView {
+	dv.wordWrap = wrap
 	return dv
 }
 
@@ -405,10 +413,39 @@ func (dv *DiffView) renderUnified() string {
 	getContent := func(in string, ls LineStyle) (content string, leadingEllipsis bool) {
 		content = strings.TrimSuffix(in, "\n")
 		content = dv.hightlightCode(content, ls.Code.GetBackground())
-		content = ansi.GraphemeWidth.Cut(content, dv.xOffset, len(content))
-		content = ansi.Truncate(content, dv.codeWidth, "…")
-		leadingEllipsis = dv.xOffset > 0 && strings.TrimSpace(content) != ""
+		if dv.wordWrap {
+			content = ansi.Wordwrap(content, dv.codeWidth, "")
+		} else {
+			content = ansi.GraphemeWidth.Cut(content, dv.xOffset, len(content))
+			content = ansi.Truncate(content, dv.codeWidth, "…")
+			leadingEllipsis = dv.xOffset > 0 && strings.TrimSpace(content) != ""
+		}
 		return content, leadingEllipsis
+	}
+
+	// writeLine writes a unified diff line. When wordWrap is enabled and
+	// content contains newlines, continuation lines are emitted with blank
+	// line-number gutters to keep the display aligned.
+	writeLine := func(ls LineStyle, symbol string, content string) {
+		lines := strings.Split(content, "\n")
+		b.WriteString(fullContentStyle.Render(
+			ls.Symbol.Render(symbol) +
+				ls.Code.Width(dv.codeWidth).Render(lines[0]),
+		))
+		b.WriteRune('\n')
+		printedLines++
+		for _, cont := range lines[1:] {
+			if dv.lineNumbers {
+				b.WriteString(ls.LineNumber.Render(pad(" ", dv.beforeNumDigits)))
+				b.WriteString(ls.LineNumber.Render(pad(" ", dv.afterNumDigits)))
+			}
+			b.WriteString(fullContentStyle.Render(
+				ls.Symbol.Render("  ") +
+					ls.Code.Width(dv.codeWidth).Render(cont),
+			))
+			b.WriteRune('\n')
+			printedLines++
+		}
 	}
 
 outer:
@@ -457,9 +494,13 @@ outer:
 						b.WriteString(ls.LineNumber.Render(pad(beforeLine, dv.beforeNumDigits)))
 						b.WriteString(ls.LineNumber.Render(pad(afterLine, dv.afterNumDigits)))
 					}
-					b.WriteString(fullContentStyle.Render(
-						ls.Code.Width(dv.fullCodeWidth).Render(ternary(leadingEllipsis, " …", "  ") + content),
-					))
+					if dv.wordWrap {
+						writeLine(ls, "  ", content)
+					} else {
+						b.WriteString(fullContentStyle.Render(
+							ls.Code.Width(dv.fullCodeWidth).Render(ternary(leadingEllipsis, " …", "  ") + content),
+						))
+					}
 				}
 				beforeLine++
 				afterLine++
@@ -471,10 +512,14 @@ outer:
 						b.WriteString(ls.LineNumber.Render(pad(" ", dv.beforeNumDigits)))
 						b.WriteString(ls.LineNumber.Render(pad(afterLine, dv.afterNumDigits)))
 					}
-					b.WriteString(fullContentStyle.Render(
-						ls.Symbol.Render(ternary(leadingEllipsis, "+…", "+ ")) +
-							ls.Code.Width(dv.codeWidth).Render(content),
-					))
+					if dv.wordWrap {
+						writeLine(ls, "+ ", content)
+					} else {
+						b.WriteString(fullContentStyle.Render(
+							ls.Symbol.Render(ternary(leadingEllipsis, "+…", "+ ")) +
+								ls.Code.Width(dv.codeWidth).Render(content),
+						))
+					}
 				}
 				afterLine++
 			case udiff.Delete:
@@ -485,18 +530,23 @@ outer:
 						b.WriteString(ls.LineNumber.Render(pad(beforeLine, dv.beforeNumDigits)))
 						b.WriteString(ls.LineNumber.Render(pad(" ", dv.afterNumDigits)))
 					}
-					b.WriteString(fullContentStyle.Render(
-						ls.Symbol.Render(ternary(leadingEllipsis, "-…", "- ")) +
-							ls.Code.Width(dv.codeWidth).Render(content),
-					))
+					if dv.wordWrap {
+						writeLine(ls, "- ", content)
+					} else {
+						b.WriteString(fullContentStyle.Render(
+							ls.Symbol.Render(ternary(leadingEllipsis, "-…", "- ")) +
+								ls.Code.Width(dv.codeWidth).Render(content),
+						))
+					}
 				}
 				beforeLine++
 			}
-			if shouldWrite() {
-				b.WriteRune('\n')
+			if !dv.wordWrap {
+				if shouldWrite() {
+					b.WriteRune('\n')
+				}
+				printedLines++
 			}
-
-			printedLines++
 		}
 	}
 

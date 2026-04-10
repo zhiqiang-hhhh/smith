@@ -30,6 +30,7 @@ type DiffPreview struct {
 	viewportDirty bool
 
 	splitMode   bool
+	wordWrap    bool
 	diffXOffset int
 	fullscreen  bool
 
@@ -53,6 +54,7 @@ type DiffPreview struct {
 		Copy        key.Binding
 		ScrollLeft  key.Binding
 		ScrollRight key.Binding
+		ToggleWrap  key.Binding
 	}
 }
 
@@ -87,6 +89,7 @@ func NewDiffPreview(com *common.Common, filePath, oldContent, newContent string)
 	d.km.Copy = key.NewBinding(key.WithKeys("c"))
 	d.km.ScrollLeft = key.NewBinding(key.WithKeys("shift+left", "h"))
 	d.km.ScrollRight = key.NewBinding(key.WithKeys("shift+right", "l"))
+	d.km.ToggleWrap = key.NewBinding(key.WithKeys("w"))
 	return d
 }
 
@@ -105,6 +108,14 @@ func (d *DiffPreview) HandleMsg(msg tea.Msg) Action {
 		}
 		if key.Matches(msg, d.km.Fullscreen) {
 			d.fullscreen = !d.fullscreen
+			d.viewportDirty = true
+			return nil
+		}
+		if key.Matches(msg, d.km.ToggleWrap) {
+			d.wordWrap = !d.wordWrap
+			if d.wordWrap {
+				d.splitMode = false
+			}
 			d.viewportDirty = true
 			return nil
 		}
@@ -197,6 +208,7 @@ func (d *DiffPreview) renderDiff(contentWidth int) string {
 		Before(d.filePath, d.oldContent).
 		After(d.filePath, d.newContent).
 		XOffset(d.diffXOffset).
+		WordWrap(d.wordWrap).
 		Width(contentWidth)
 
 	if d.splitMode {
@@ -231,8 +243,12 @@ func (d *DiffPreview) Draw(scr uv.Screen, area uv.Rectangle) *tea.Cursor {
 	if !d.splitMode {
 		modeStr = "unified"
 	}
+	wrapStr := "off"
+	if d.wordWrap {
+		wrapStr = "on"
+	}
 	helpView := t.Dialog.HelpView.Width(contentWidth).Render(
-		"esc/q: close · j/k: scroll · h/l: pan · t: " + modeStr + " · f: fullscreen · c: copy · drag: select",
+		"esc/q: close · j/k: scroll · h/l: pan · t: " + modeStr + " · w: wrap " + wrapStr + " · f: fullscreen · c: copy",
 	)
 	helpHeight := lipgloss.Height(helpView)
 
