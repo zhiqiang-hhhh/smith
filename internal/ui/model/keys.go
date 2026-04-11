@@ -74,6 +74,7 @@ type KeyMap struct {
 	ForkSession   key.Binding
 	NewWindow     key.Binding
 	Tab           key.Binding
+	Shell         key.Binding
 }
 
 func DefaultKeyMap() KeyMap {
@@ -125,6 +126,10 @@ func DefaultKeyMap() KeyMap {
 		Tab: key.NewBinding(
 			key.WithKeys("tab"),
 			key.WithHelp("tab", "change focus"),
+		),
+		Shell: key.NewBinding(
+			key.WithKeys("!"),
+			key.WithHelp("!", "shell"),
 		),
 	}
 

@@ -12,6 +12,7 @@ import (
 	"math/rand"
 	"net/http"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"regexp"
 	"slices"
@@ -112,6 +113,8 @@ const (
 type openEditorMsg struct {
 	Text string
 }
+
+type shellExitMsg struct{}
 
 type (
 	// cancelTimerExpiredMsg is sent when the cancel timer expires.
@@ -1052,6 +1055,8 @@ func (m *UI) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.textarea.SetValue(msg.Text)
 		m.textarea.MoveToEnd()
 		cmds = append(cmds, m.updateTextareaWithPrevHeight(msg, prevHeight))
+	case shellExitMsg:
+		cmds = append(cmds, util.CmdHandler(util.NewInfoMsg("Returned from shell")))
 	case util.InfoMsg:
 		if msg.Type == util.InfoTypeError {
 			slog.Error("Error reported", "error", msg.Msg)
@@ -1622,6 +1627,9 @@ func (m *UI) handleDialogMsg(msg tea.Msg) tea.Cmd {
 	case dialog.ActionNewWindow:
 		m.dialog.CloseDialog(dialog.CommandsID)
 		cmds = append(cmds, m.openNewMuxWindow())
+	case dialog.ActionOpenShell:
+		m.dialog.CloseDialog(dialog.CommandsID)
+		cmds = append(cmds, m.openShell())
 	case dialog.ActionSelfUpdate:
 		m.dialog.CloseDialog(dialog.CommandsID)
 		cmds = append(cmds, m.selfUpdate())
@@ -2101,6 +2109,8 @@ func (m *UI) handleKeyPressMsg(msg tea.KeyPressMsg) tea.Cmd {
 				if cmd := m.openCommandsDialog(); cmd != nil {
 					cmds = append(cmds, cmd)
 				}
+			case key.Matches(msg, m.keyMap.Shell) && m.textarea.Value() == "":
+				cmds = append(cmds, m.openShell())
 			case key.Matches(msg, m.keyMap.Tab):
 				if cmd := m.cycleAgent(); cmd != nil {
 					cmds = append(cmds, cmd)
@@ -2621,6 +2631,7 @@ func (m *UI) FullHelp() [][]key.Binding {
 				k.Editor.Newline,
 				k.Editor.MentionFile,
 				k.Editor.OpenEditor,
+				k.Shell,
 			}
 			if m.currentModelSupportsImages() {
 				editorBinds = append(editorBinds, k.Editor.AddImage, k.Editor.PasteImage)
@@ -3044,6 +3055,23 @@ func (m *UI) openEditor(value string) tea.Cmd {
 		return openEditorMsg{
 			Text: strings.TrimSpace(string(content)),
 		}
+	})
+}
+
+// openShell launches an interactive shell, taking over the terminal. When the
+// shell exits, the TUI is restored with all session state preserved.
+func (m *UI) openShell() tea.Cmd {
+	sh := os.Getenv("SHELL")
+	if sh == "" {
+		sh = "/bin/sh"
+	}
+	cmd := exec.Command(sh, "-i") //nolint:gosec
+	cmd.Dir, _ = os.Getwd()
+	return tea.ExecProcess(cmd, func(err error) tea.Msg {
+		if err != nil {
+			return util.NewErrorMsg(err)
+		}
+		return shellExitMsg{}
 	})
 }
 

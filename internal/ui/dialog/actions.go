@@ -58,7 +58,7 @@ type (
 	ActionSwitchAgent                 struct {
 		AgentID string
 	}
-	ActionSummarize                   struct {
+	ActionSummarize struct {
 		SessionID string
 	}
 	// ActionSelectReasoningEffort is a message indicating a reasoning effort
@@ -110,6 +110,8 @@ type (
 	ActionOpenSearchResult struct {
 		search.SearchResult
 	}
+	// ActionOpenShell opens an interactive shell session.
+	ActionOpenShell struct{}
 )
 
 // Messages for API key input dialog.
