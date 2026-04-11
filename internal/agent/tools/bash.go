@@ -6,6 +6,7 @@ import (
 	"context"
 	_ "embed"
 	"fmt"
+	"log/slog"
 	"path/filepath"
 	"runtime"
 	"strings"
@@ -363,6 +364,10 @@ func NewBashTool(permissions permission.Service, workingDir string, attribution 
 			}
 
 			// Still running - keep as background job
+			slog.Debug("Bash: command auto-backgrounded",
+				"shell_id", bgShell.ID,
+				"command", params.Command,
+				"elapsed", time.Since(startTime).String())
 			metadata := BashResponseMetadata{
 				StartTime:        startTime.UnixMilli(),
 				EndTime:          time.Now().UnixMilli(),

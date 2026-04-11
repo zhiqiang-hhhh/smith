@@ -45,6 +45,37 @@ Common shell builtins and core utils available on Windows.
   * Short-lived scripts
 </background_execution>
 
+<process_lifecycle>
+CRITICAL: Every shell command MUST eventually exit on its own. The shell
+interpreter waits for all child processes — if any keep running, the job
+never completes and appears stuck.
+
+- If a script starts a background service (server, daemon) as a helper for
+  later commands, the script MUST kill it before exiting:
+    server &
+    SERVER_PID=$!
+    trap "kill $SERVER_PID 2>/dev/null; wait $SERVER_PID 2>/dev/null" EXIT
+    run_tests
+    # EXIT trap fires automatically
+
+- NEVER start persistent processes (servers, watchers, daemons) inside a
+  synchronous (non-background) bash call. If you need a long-running
+  service, start it in a SEPARATE bash call with run_in_background=true,
+  then run your commands in another bash call.
+
+- When using run_in_background=true for a service, always call job_kill
+  when you are done with it. Do not leave orphan background jobs.
+  Exception: if the USER explicitly asked you to start a service for them,
+  leave it running — the user will manage its lifecycle.
+
+- When writing multi-step scripts that start helper services:
+  1. Start the service, capture its PID
+  2. Set a trap to kill it on EXIT/ERR
+  3. Wait for it to be ready (poll a port/endpoint, not sleep)
+  4. Run your actual work
+  5. The trap handles cleanup automatically
+</process_lifecycle>
+
 <git_safety>
 Git Safety Protocol:
 - NEVER update the git config
