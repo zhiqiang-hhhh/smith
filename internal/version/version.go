@@ -5,8 +5,9 @@ import "runtime/debug"
 // Build-time parameters set via -ldflags.
 
 var (
-	Version = "devel"
-	Commit  = "unknown"
+	Version   = "devel"
+	Commit    = "unknown"
+	BuildDate = "unknown"
 )
 
 // A user may install crush using `go install github.com/charmbracelet/crush@latest`.
@@ -22,4 +23,33 @@ func init() {
 	if mainVersion != "" && mainVersion != "(devel)" {
 		Version = mainVersion
 	}
+	for _, s := range info.Settings {
+		switch s.Key {
+		case "vcs.revision":
+			if Commit == "unknown" && s.Value != "" {
+				Commit = s.Value
+			}
+		case "vcs.time":
+			if BuildDate == "unknown" && s.Value != "" {
+				BuildDate = s.Value
+			}
+		}
+	}
+}
+
+// Full returns a human-readable version string including commit and build
+// date.
+func Full() string {
+	s := Version
+	if Commit != "unknown" {
+		c := Commit
+		if len(c) > 8 {
+			c = c[:8]
+		}
+		s += " (" + c + ")"
+	}
+	if BuildDate != "unknown" {
+		s += " built " + BuildDate
+	}
+	return s
 }
