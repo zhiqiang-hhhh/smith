@@ -224,6 +224,6 @@ require (
 replace github.com/charmbracelet/ultraviolet => github.com/amosbird/ultraviolet v0.0.0-20260408152937-388c7d6b3a92
 
 // Word-boundary aware Ctrl+W/Ctrl+D and CJK cursor positioning fix.
-replace charm.land/bubbles/v2 => github.com/amosbird/bubbles/v2 v2.1.1-0.20260329024325-01e52635f8e0
+replace charm.land/bubbles/v2 => github.com/zhiqiang-hhhh/bubbles/v2 v2.1.1-0.20260415104318-6ab69006419f
 
 replace charm.land/fantasy => github.com/amosbird/fantasy v0.17.2-0.20260406140319-803c63dd31cd
