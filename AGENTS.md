@@ -168,8 +168,10 @@ func TestYourFunction(t *testing.T) {
 
 - ALWAYS use semantic commits (`fix:`, `feat:`, `chore:`, `refactor:`,
   `docs:`, `sec:`, etc).
-- Try to keep commits to one line, not including your attribution. Only use
-  multi-line commits when additional context is truly necessary.
+- Try to keep commits to one line. Only use multi-line commits when
+  additional context is truly necessary.
+- Do NOT add any Crush branding, attribution, or "Generated with Crush"
+  lines to commit messages or PR descriptions.
 
 ## Working on the TUI (UI)
 
