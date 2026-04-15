@@ -1,13 +1,12 @@
-# Crush Development Guide
+# Development Guide
 
 ## Project Overview
 
-Crush is a terminal-based AI coding assistant built in Go by
-[Charm](https://charm.land). It connects to LLMs and gives them tools to read,
-write, and execute code. It supports multiple providers (Anthropic, OpenAI,
-Gemini, Bedrock, Copilot, Hyper, MiniMax, Vercel, and more), integrates with
-LSPs for code intelligence, and supports extensibility via MCP servers and
-agent skills.
+A terminal-based AI coding assistant built in Go. It connects to LLMs and
+gives them tools to read, write, and execute code. It supports multiple
+providers (Anthropic, OpenAI, Gemini, Bedrock, Copilot, Hyper, MiniMax,
+Vercel, and more), integrates with LSPs for code intelligence, and supports
+extensibility via MCP servers and agent skills.
 
 The module path is `github.com/charmbracelet/crush`.
 
@@ -63,7 +62,7 @@ internal/
   `.md` description file in `internal/agent/tools/`.
 - **System prompts are Go templates**: `internal/agent/templates/*.md.tpl`
   with runtime data injected.
-- **Context files**: Crush reads AGENTS.md, CRUSH.md, CLAUDE.md, GEMINI.md
+- **Context files**: Reads AGENTS.md, CRUSH.md, CLAUDE.md, GEMINI.md
   (and `.local` variants) from the working directory for project-specific
   instructions.
 - **Persistence**: SQLite + sqlc. All queries live in `internal/db/sql/`,
@@ -170,8 +169,8 @@ func TestYourFunction(t *testing.T) {
   `docs:`, `sec:`, etc).
 - Try to keep commits to one line. Only use multi-line commits when
   additional context is truly necessary.
-- Do NOT add any Crush branding, attribution, or "Generated with Crush"
-  lines to commit messages or PR descriptions.
+- Do NOT add any branding or attribution lines to commit messages or PR
+  descriptions.
 
 ## Working on the TUI (UI)
 
