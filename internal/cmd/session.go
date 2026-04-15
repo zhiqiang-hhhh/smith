@@ -25,7 +25,6 @@ import (
 	"github.com/charmbracelet/crush/internal/ui/chat"
 	"github.com/charmbracelet/crush/internal/ui/styles"
 	"github.com/charmbracelet/x/ansi"
-	"github.com/charmbracelet/x/exp/charmtone"
 	"github.com/charmbracelet/x/term"
 	"github.com/spf13/cobra"
 )
@@ -176,8 +175,8 @@ func runSessionList(cmd *cobra.Command, _ []string) error {
 	w, cleanup, usingPager := sessionWriter(ctx, len(list))
 	defer cleanup()
 
-	hashStyle := lipgloss.NewStyle().Foreground(charmtone.Malibu)
-	dateStyle := lipgloss.NewStyle().Foreground(charmtone.Damson)
+	hashStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("#5c9cf5"))
+	dateStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("#3b7dd8"))
 
 	width := sessionOutputWidth
 	if tw, _, err := term.GetSize(os.Stdout.Fd()); err == nil && tw > 0 {
@@ -496,8 +495,8 @@ func outputSessionHuman(ctx context.Context, sess session.Session, msgs []*messa
 	}
 	contentWidth := min(width, sessionMaxContentWidth)
 
-	keyStyle := lipgloss.NewStyle().Foreground(charmtone.Damson)
-	valStyle := lipgloss.NewStyle().Foreground(charmtone.Malibu)
+	keyStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("#3b7dd8"))
+	valStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("#5c9cf5"))
 
 	hash := session.HashID(sess.ID)[:12]
 	created := time.Unix(sess.CreatedAt, 0).Format("Mon Jan 2 15:04:05 2006 -0700")

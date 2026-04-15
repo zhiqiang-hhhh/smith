@@ -626,7 +626,7 @@ func highlightLine(line string, tokens []string) string {
 		markPinyinMatches(runes, tokenLower, hl)
 	}
 
-	highlightStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("#DAA520")).Bold(true)
+	highlightStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("#fab283")).Bold(true)
 
 	var result strings.Builder
 	i := 0

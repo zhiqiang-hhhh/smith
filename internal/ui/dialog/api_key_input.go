@@ -16,7 +16,7 @@ import (
 	"github.com/charmbracelet/crush/internal/ui/styles"
 	"github.com/charmbracelet/crush/internal/ui/util"
 	uv "github.com/charmbracelet/ultraviolet"
-	"github.com/charmbracelet/x/exp/charmtone"
+	"charm.land/lipgloss/v2"
 )
 
 type APIKeyInputState int
@@ -202,7 +202,7 @@ func (m *APIKeyInput) headerView() string {
 		return textStyle.Render(m.dialogTitle())
 	}
 	headerOffset := titleStyle.GetHorizontalFrameSize() + dialogStyle.GetHorizontalFrameSize()
-	return common.DialogTitle(t, titleStyle.Render(m.dialogTitle()), m.width-headerOffset, charmtone.Yam, charmtone.Cumin)
+	return common.DialogTitle(t, titleStyle.Render(m.dialogTitle()), m.width-headerOffset, lipgloss.Color("#fab283"), lipgloss.Color("#fab283"))
 }
 
 func (m *APIKeyInput) dialogTitle() string {
@@ -249,7 +249,7 @@ func (m *APIKeyInput) inputView() string {
 		m.input.Blur()
 	case APIKeyInputStateError:
 		ts := t.TextInput
-		ts.Focused.Prompt = ts.Focused.Prompt.Foreground(charmtone.Cherry)
+		ts.Focused.Prompt = ts.Focused.Prompt.Foreground(lipgloss.Color("#e06c75"))
 
 		m.input.Prompt = styles.LSPErrorIcon + " "
 		m.input.SetStyles(ts)

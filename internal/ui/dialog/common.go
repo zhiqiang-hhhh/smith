@@ -9,7 +9,6 @@ import (
 	"github.com/charmbracelet/crush/internal/ui/common"
 	"github.com/charmbracelet/crush/internal/ui/styles"
 	"github.com/charmbracelet/x/ansi"
-	"github.com/charmbracelet/x/exp/charmtone"
 )
 
 // InputCursor adjusts the cursor position for an input field within a dialog.
@@ -99,8 +98,8 @@ func NewRenderContext(t *styles.Styles, width int) *RenderContext {
 		Styles:                 t,
 		TitleStyle:             t.Dialog.Title,
 		ViewStyle:              t.Dialog.View,
-		TitleGradientFromColor: charmtone.Yam,
-		TitleGradientToColor:   charmtone.Cumin,
+		TitleGradientFromColor: lipgloss.Color("#fab283"),
+		TitleGradientToColor:   lipgloss.Color("#fab283"),
 		Width:                  width,
 		Parts:                  []string{},
 	}

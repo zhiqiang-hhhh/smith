@@ -17,7 +17,6 @@ import (
 	"github.com/charmbracelet/crush/internal/ui/common"
 	"github.com/charmbracelet/crush/internal/ui/styles"
 	uv "github.com/charmbracelet/ultraviolet"
-	"github.com/charmbracelet/x/exp/charmtone"
 )
 
 // PermissionsID is the identifier for the permissions dialog.
@@ -447,7 +446,7 @@ func (p *Permissions) Draw(scr uv.Screen, area uv.Rectangle) *tea.Cursor {
 func (p *Permissions) renderHeader(contentWidth int) string {
 	t := p.com.Styles
 
-	title := common.DialogTitle(t, "Permission Required", contentWidth-t.Dialog.Title.GetHorizontalFrameSize(), charmtone.Yam, charmtone.Cumin)
+	title := common.DialogTitle(t, "Permission Required", contentWidth-t.Dialog.Title.GetHorizontalFrameSize(), lipgloss.Color("#fab283"), lipgloss.Color("#fab283"))
 	title = t.Dialog.Title.Render(title)
 
 	// Tool info.

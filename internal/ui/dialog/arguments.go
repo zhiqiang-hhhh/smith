@@ -18,7 +18,6 @@ import (
 	"github.com/charmbracelet/crush/internal/ui/common"
 	"github.com/charmbracelet/crush/internal/ui/util"
 	uv "github.com/charmbracelet/ultraviolet"
-	"github.com/charmbracelet/x/exp/charmtone"
 )
 
 // ArgumentsID is the identifier for the arguments dialog.
@@ -315,7 +314,7 @@ func (a *Arguments) Draw(scr uv.Screen, area uv.Rectangle) *tea.Cursor {
 
 	titleText := cmp.Or(a.title, "Arguments")
 
-	header := common.DialogTitle(s, titleText, width, charmtone.Yam, charmtone.Cumin)
+	header := common.DialogTitle(s, titleText, width, lipgloss.Color("#fab283"), lipgloss.Color("#fab283"))
 
 	// Add description if available.
 	var description string

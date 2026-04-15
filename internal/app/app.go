@@ -40,7 +40,6 @@ import (
 	"github.com/charmbracelet/crush/internal/update"
 	"github.com/charmbracelet/crush/internal/version"
 	"github.com/charmbracelet/x/ansi"
-	"github.com/charmbracelet/x/exp/charmtone"
 	"github.com/charmbracelet/x/term"
 )
 
@@ -246,7 +245,7 @@ func (app *App) RunNonInteractive(ctx context.Context, output io.Writer, prompt,
 		if f, ok := output.(*os.File); ok && stdinTTY && stdoutTTY {
 			hasDarkBG = lipgloss.HasDarkBackground(os.Stdin, f)
 		}
-		defaultFG := lipgloss.LightDark(hasDarkBG)(charmtone.Pepper, t.FgBase)
+		defaultFG := lipgloss.LightDark(hasDarkBG)(lipgloss.Color("#212121"), t.FgBase)
 
 		spinner = format.NewSpinner(ctx, cancel, anim.Settings{
 			Size:        10,

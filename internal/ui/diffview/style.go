@@ -78,46 +78,46 @@ func DefaultDarkStyle() Style {
 	return Style{
 		DividerLine: LineStyle{
 			LineNumber: lipgloss.NewStyle().
-				Foreground(charmtone.Smoke).
-				Background(charmtone.Sapphire),
+				Foreground(lipgloss.Color("#888888")).
+				Background(lipgloss.Color("#212121")),
 			Code: lipgloss.NewStyle().
-				Foreground(charmtone.Smoke).
-				Background(charmtone.Ox),
+				Foreground(lipgloss.Color("#a0a0a0")).
+				Background(lipgloss.Color("#212121")),
 		},
 		MissingLine: LineStyle{
 			LineNumber: lipgloss.NewStyle().
-				Background(charmtone.Charcoal),
+				Background(lipgloss.Color("#212121")),
 			Code: lipgloss.NewStyle().
-				Background(charmtone.Charcoal),
+				Background(lipgloss.Color("#212121")),
 		},
 		EqualLine: LineStyle{
 			LineNumber: lipgloss.NewStyle().
-				Foreground(charmtone.Ash).
-				Background(charmtone.Charcoal),
+				Foreground(lipgloss.Color("#888888")).
+				Background(lipgloss.Color("#212121")),
 			Code: lipgloss.NewStyle().
-				Foreground(charmtone.Salt).
-				Background(charmtone.Pepper),
+				Foreground(lipgloss.Color("#a0a0a0")).
+				Background(lipgloss.Color("#212121")),
 		},
 		InsertLine: LineStyle{
 			LineNumber: lipgloss.NewStyle().
-				Foreground(charmtone.Turtle).
+				Foreground(lipgloss.Color("#888888")).
 				Background(lipgloss.Color("#293229")),
 			Symbol: lipgloss.NewStyle().
-				Foreground(charmtone.Turtle).
+				Foreground(lipgloss.Color("#478247")).
 				Background(lipgloss.Color("#303a30")),
 			Code: lipgloss.NewStyle().
-				Foreground(charmtone.Salt).
+				Foreground(lipgloss.Color("#478247")).
 				Background(lipgloss.Color("#303a30")),
 		},
 		DeleteLine: LineStyle{
 			LineNumber: lipgloss.NewStyle().
-				Foreground(charmtone.Cherry).
+				Foreground(lipgloss.Color("#888888")).
 				Background(lipgloss.Color("#332929")),
 			Symbol: lipgloss.NewStyle().
-				Foreground(charmtone.Cherry).
+				Foreground(lipgloss.Color("#7C4444")).
 				Background(lipgloss.Color("#3a3030")),
 			Code: lipgloss.NewStyle().
-				Foreground(charmtone.Salt).
+				Foreground(lipgloss.Color("#7C4444")).
 				Background(lipgloss.Color("#3a3030")),
 		},
 	}
