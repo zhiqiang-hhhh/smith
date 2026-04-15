@@ -46,8 +46,8 @@ import (
 	"github.com/charmbracelet/crush/internal/pubsub"
 	"github.com/charmbracelet/crush/internal/session"
 	"github.com/charmbracelet/crush/internal/stringext"
+	"github.com/charmbracelet/crush/internal/trace"
 	"github.com/charmbracelet/crush/internal/version"
-	"github.com/charmbracelet/x/exp/charmtone"
 )
 
 const (
@@ -76,6 +76,14 @@ const (
 )
 
 var userAgent = fmt.Sprintf("Charm-Crush/%s (https://charm.land/crush)", version.Version)
+
+// contextTooLargePattern is a fallback regex for detecting context-too-large
+// errors that the provider SDK doesn't recognize. This covers error formats
+// from Copilot, Azure OpenAI, and other OpenAI-compatible APIs that use
+// non-standard messages.
+var contextTooLargePattern = regexp.MustCompile(
+	`(?i)(?:prompt|input|context|request)\s+token\s+(?:count\s+)?(?:of\s+)?(\d+)\s+(?:exceeds?|is\s+too\s+large|over)\b`,
+)
 
 // maxAutoSummarizeDepth limits recursive auto-summarize attempts to prevent
 // unbounded loops when summarization fails to reduce context.
@@ -217,6 +225,10 @@ func (a *sessionAgent) Run(ctx context.Context, call SessionAgentCall) (*fantasy
 	if call.SessionID == "" {
 		return nil, ErrSessionMissing
 	}
+
+	trace.Emit("agent", "run_start", call.SessionID, map[string]any{
+		"prompt_len": len(call.Prompt),
+	})
 
 	// Queue the message if busy
 	if a.IsSessionBusy(call.SessionID) {
@@ -380,6 +392,9 @@ func (a *sessionAgent) Run(ctx context.Context, call SessionAgentCall) (*fantasy
 		FrequencyPenalty:  call.FrequencyPenalty,
 		StreamIdleTimeout: streamIdleTimeout,
 		PrepareStep: func(callContext context.Context, options fantasy.PrepareStepFunctionOptions) (_ context.Context, prepared fantasy.PrepareStepResult, err error) {
+			trace.Emit("agent", "prepare_step", call.SessionID, map[string]any{
+				"message_count": len(options.Messages),
+			})
 			prepared.Messages = options.Messages
 			for i := range prepared.Messages {
 				prepared.Messages[i].ProviderOptions = nil
@@ -413,6 +428,8 @@ func (a *sessionAgent) Run(ctx context.Context, call SessionAgentCall) (*fantasy
 			prepared.Messages = clearToolResultsAfterIdleGap(prepared.Messages, currentSession.UpdatedAt)
 			prepared.Messages = clearOldToolResults(prepared.Messages, cw, usedTokens)
 			prepared.Messages = truncateLargeToolResults(prepared.Messages)
+			prepared.Messages = repairOrphanedToolCalls(prepared.Messages)
+			prepared.Messages = repairOrphanedToolResults(prepared.Messages)
 
 			lastSystemRoleInx := 0
 			systemMessageUpdated := false
@@ -515,6 +532,9 @@ func (a *sessionAgent) Run(ctx context.Context, call SessionAgentCall) (*fantasy
 			return a.messages.Update(ctx, *currentAssistant)
 		},
 		OnRetry: func(err *fantasy.ProviderError, delay time.Duration) {
+			trace.Emit("agent", "retry", call.SessionID, map[string]any{
+				"delay": delay.String(),
+			})
 			if currentAssistant != nil {
 				currentAssistant.Parts = nil
 				if updateErr := a.messages.Update(ctx, *currentAssistant); updateErr != nil {
@@ -537,6 +557,10 @@ func (a *sessionAgent) Run(ctx context.Context, call SessionAgentCall) (*fantasy
 			}
 		},
 		OnToolCall: func(tc fantasy.ToolCallContent) error {
+			trace.Emit("tool", "call", call.SessionID, map[string]any{
+				"tool_name":    tc.ToolName,
+				"tool_call_id": tc.ToolCallID,
+			})
 			sw.Flush(ctx)
 			toolCall := message.ToolCall{
 				ID:               tc.ToolCallID,
@@ -551,6 +575,9 @@ func (a *sessionAgent) Run(ctx context.Context, call SessionAgentCall) (*fantasy
 			return a.messages.Update(ctx, *currentAssistant)
 		},
 		OnToolResult: func(result fantasy.ToolResultContent) error {
+			trace.Emit("tool", "result", call.SessionID, map[string]any{
+				"tool_call_id": result.ToolCallID,
+			})
 			toolResult := a.convertToToolResult(result)
 			// Use parent ctx instead of genCtx to ensure the message is created
 			// even if the request is canceled mid-stream
@@ -563,6 +590,11 @@ func (a *sessionAgent) Run(ctx context.Context, call SessionAgentCall) (*fantasy
 			return createMsgErr
 		},
 		OnStepFinish: func(stepResult fantasy.StepResult) error {
+			trace.Emit("agent", "step_finish", call.SessionID, map[string]any{
+				"finish_reason":     string(stepResult.FinishReason),
+				"prompt_tokens":     stepResult.Usage.InputTokens,
+				"completion_tokens": stepResult.Usage.OutputTokens,
+			})
 			sw.Flush(ctx)
 			finishReason := message.FinishReasonUnknown
 			switch stepResult.FinishReason {
@@ -606,6 +638,9 @@ func (a *sessionAgent) Run(ctx context.Context, call SessionAgentCall) (*fantasy
 				threshold := a.autoSummarizeThreshold(largeModel)
 				shouldTrigger := threshold > 0 && tokens >= threshold
 				if shouldTrigger && !a.disableAutoSummarize && !a.circuitBreaker.isTripped(call.SessionID) {
+					trace.Emit("agent", "auto_summarize_triggered", call.SessionID, map[string]any{
+						"tokens": tokens,
+					})
 					shouldSummarize = true
 					return true
 				}
@@ -621,15 +656,16 @@ func (a *sessionAgent) Run(ctx context.Context, call SessionAgentCall) (*fantasy
 	a.eventPromptResponded(call.SessionID, time.Since(startTime).Truncate(time.Second))
 
 	if err != nil {
-		var contextTooLargeErr *fantasy.ProviderError
-		if errors.As(err, &contextTooLargeErr) && contextTooLargeErr.IsContextTooLarge() && !a.disableAutoSummarize && !a.circuitBreaker.isTripped(call.SessionID) {
+		trace.Emit("agent", "stream_error", call.SessionID, map[string]any{
+			"error": err.Error(),
+		})
+		if isContextTooLargeError(err) && !a.disableAutoSummarize && !a.circuitBreaker.isTripped(call.SessionID) {
 			if call.autoSummarizeDepth >= maxAutoSummarizeDepth {
 				return nil, fmt.Errorf("context too large after %d auto-summarize attempts", maxAutoSummarizeDepth)
 			}
 			slog.Warn("Context too large, triggering auto-summarize",
 				"session_id", call.SessionID,
-				"used_tokens", contextTooLargeErr.ContextUsedTokens,
-				"max_tokens", contextTooLargeErr.ContextMaxTokens,
+				"error", err,
 			)
 			cancel()
 			a.activeRequests.Del(call.SessionID)
@@ -717,7 +753,7 @@ func (a *sessionAgent) Run(ctx context.Context, call SessionAgentCall) (*fantasy
 		var fantasyErr *fantasy.Error
 		var providerErr *fantasy.ProviderError
 		const defaultTitle = "Provider Error"
-		linkStyle := lipgloss.NewStyle().Foreground(charmtone.Guac).Underline(true)
+		linkStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("#3d9a57")).Underline(true)
 		if isCancelErr {
 			currentAssistant.AddFinish(message.FinishReasonCanceled, "User canceled request", "")
 		} else if isPermissionErr {
@@ -808,6 +844,8 @@ func (a *sessionAgent) Run(ctx context.Context, call SessionAgentCall) (*fantasy
 		return result, err
 	}
 
+	trace.Emit("agent", "run_end", call.SessionID, nil)
+
 	return result, err
 }
 
@@ -835,6 +873,7 @@ func (a *sessionAgent) drainQueue(ctx context.Context, sessionID string) (*fanta
 }
 
 func (a *sessionAgent) Summarize(ctx context.Context, sessionID string, opts fantasy.ProviderOptions) error {
+	trace.Emit("agent", "summarize_start", sessionID, nil)
 	slog.Debug("Summarize() starting",
 		"session_id", sessionID,
 		"is_busy", a.IsSessionBusy(sessionID),
@@ -1004,6 +1043,7 @@ func (a *sessionAgent) Summarize(ctx context.Context, sessionID string, opts fan
 	tools.ResetCache()
 	a.circuitBreaker.recordSuccess(sessionID)
 
+	trace.Emit("agent", "summarize_end", sessionID, nil)
 	slog.Debug("Summarize() completed",
 		"session_id", sessionID,
 		"queue_size", a.QueuedPrompts(sessionID),
@@ -1104,6 +1144,7 @@ If not, please feel free to ignore. Again do not mention this message to the use
 	}
 
 	history = repairOrphanedToolCalls(history)
+	history = repairOrphanedToolResults(history)
 
 	var files []fantasy.FilePart
 	for _, attachment := range attachments {
@@ -1220,6 +1261,49 @@ func removeFromSlice(s []string, val string) []string {
 		result = append(result, v)
 	}
 	return result
+}
+
+// repairOrphanedToolResults removes tool_result blocks whose tool_use_id has
+// no matching tool_use in a preceding assistant message. This can happen when
+// auto-summarization discards the assistant message containing the tool_use
+// while keeping the subsequent tool_result.
+func repairOrphanedToolResults(history []fantasy.Message) []fantasy.Message {
+	toolUseIDs := make(map[string]struct{})
+	for _, msg := range history {
+		if msg.Role != fantasy.MessageRoleAssistant {
+			continue
+		}
+		for _, part := range msg.Content {
+			if tc, ok := fantasy.AsContentType[fantasy.ToolCallPart](part); ok {
+				toolUseIDs[tc.ToolCallID] = struct{}{}
+			}
+		}
+	}
+
+	var repaired []fantasy.Message
+	for _, msg := range history {
+		if msg.Role != fantasy.MessageRoleTool {
+			repaired = append(repaired, msg)
+			continue
+		}
+		var kept []fantasy.MessagePart
+		for _, part := range msg.Content {
+			if tr, ok := fantasy.AsContentType[fantasy.ToolResultPart](part); ok {
+				if _, found := toolUseIDs[tr.ToolCallID]; !found {
+					trace.Emit("agent", "orphaned_tool_result_removed", "", map[string]any{
+						"tool_call_id": tr.ToolCallID,
+					})
+					continue
+				}
+			}
+			kept = append(kept, part)
+		}
+		if len(kept) > 0 {
+			msg.Content = kept
+			repaired = append(repaired, msg)
+		}
+	}
+	return repaired
 }
 
 func (a *sessionAgent) getSessionMessages(ctx context.Context, session session.Session) ([]message.Message, error) {
@@ -1557,6 +1641,23 @@ func (a *sessionAgent) autoSummarizeThreshold(model Model) int64 {
 		return 0
 	}
 	return threshold
+}
+
+// isContextTooLargeError checks whether err indicates the prompt exceeded the
+// model's context window. It first delegates to fantasy's built-in
+// IsContextTooLarge(), then falls back to a broader regex that catches error
+// formats from Copilot, Azure OpenAI, and other providers whose messages
+// don't match the SDK's built-in patterns.
+func isContextTooLargeError(err error) bool {
+	var providerErr *fantasy.ProviderError
+	if !errors.As(err, &providerErr) {
+		return contextTooLargePattern.MatchString(err.Error())
+	}
+	if providerErr.IsContextTooLarge() {
+		return true
+	}
+	return providerErr.StatusCode == 400 &&
+		contextTooLargePattern.MatchString(providerErr.Message)
 }
 
 func (a *sessionAgent) SetTools(tools []fantasy.AgentTool) {

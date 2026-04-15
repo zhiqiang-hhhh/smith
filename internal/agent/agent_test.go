@@ -748,6 +748,86 @@ func TestRepairOrphanedToolCalls(t *testing.T) {
 	})
 }
 
+func TestRepairOrphanedToolResults(t *testing.T) {
+	t.Parallel()
+
+	t.Run("no orphans", func(t *testing.T) {
+		t.Parallel()
+		history := []fantasy.Message{
+			{Role: fantasy.MessageRoleUser, Content: []fantasy.MessagePart{fantasy.TextPart{Text: "hello"}}},
+			{Role: fantasy.MessageRoleAssistant, Content: []fantasy.MessagePart{
+				fantasy.ToolCallPart{ToolCallID: "tc1", ToolName: "bash", Input: "{}"},
+			}},
+			{Role: fantasy.MessageRoleTool, Content: []fantasy.MessagePart{
+				fantasy.ToolResultPart{ToolCallID: "tc1", Output: fantasy.ToolResultOutputContentText{Text: "ok"}},
+			}},
+		}
+		result := repairOrphanedToolResults(history)
+		assert.Equal(t, len(history), len(result))
+	})
+
+	t.Run("orphaned tool result is removed", func(t *testing.T) {
+		t.Parallel()
+		// Simulates post-summarization: the assistant message with tool_use was
+		// truncated, but the tool_result message survived.
+		history := []fantasy.Message{
+			{Role: fantasy.MessageRoleUser, Content: []fantasy.MessagePart{fantasy.TextPart{Text: "summary"}}},
+			{Role: fantasy.MessageRoleTool, Content: []fantasy.MessagePart{
+				fantasy.ToolResultPart{ToolCallID: "tc-gone", Output: fantasy.ToolResultOutputContentText{Text: "result"}},
+			}},
+			{Role: fantasy.MessageRoleUser, Content: []fantasy.MessagePart{fantasy.TextPart{Text: "continue"}}},
+		}
+		result := repairOrphanedToolResults(history)
+		require.Equal(t, 2, len(result))
+		assert.Equal(t, fantasy.MessageRoleUser, result[0].Role)
+		assert.Equal(t, fantasy.MessageRoleUser, result[1].Role)
+	})
+
+	t.Run("mixed orphaned and valid results in same message", func(t *testing.T) {
+		t.Parallel()
+		history := []fantasy.Message{
+			{Role: fantasy.MessageRoleAssistant, Content: []fantasy.MessagePart{
+				fantasy.ToolCallPart{ToolCallID: "tc1", ToolName: "bash", Input: "{}"},
+			}},
+			{Role: fantasy.MessageRoleTool, Content: []fantasy.MessagePart{
+				fantasy.ToolResultPart{ToolCallID: "tc1", Output: fantasy.ToolResultOutputContentText{Text: "ok"}},
+				fantasy.ToolResultPart{ToolCallID: "tc-orphan", Output: fantasy.ToolResultOutputContentText{Text: "stale"}},
+			}},
+		}
+		result := repairOrphanedToolResults(history)
+		require.Equal(t, 2, len(result))
+		toolMsg := result[1]
+		require.Equal(t, 1, len(toolMsg.Content))
+		tr, ok := fantasy.AsContentType[fantasy.ToolResultPart](toolMsg.Content[0])
+		require.True(t, ok)
+		assert.Equal(t, "tc1", tr.ToolCallID)
+	})
+
+	t.Run("all results orphaned removes entire tool message", func(t *testing.T) {
+		t.Parallel()
+		history := []fantasy.Message{
+			{Role: fantasy.MessageRoleUser, Content: []fantasy.MessagePart{fantasy.TextPart{Text: "hello"}}},
+			{Role: fantasy.MessageRoleTool, Content: []fantasy.MessagePart{
+				fantasy.ToolResultPart{ToolCallID: "tc-a", Output: fantasy.ToolResultOutputContentText{Text: "a"}},
+				fantasy.ToolResultPart{ToolCallID: "tc-b", Output: fantasy.ToolResultOutputContentText{Text: "b"}},
+			}},
+		}
+		result := repairOrphanedToolResults(history)
+		require.Equal(t, 1, len(result))
+		assert.Equal(t, fantasy.MessageRoleUser, result[0].Role)
+	})
+
+	t.Run("no tool messages at all", func(t *testing.T) {
+		t.Parallel()
+		history := []fantasy.Message{
+			{Role: fantasy.MessageRoleUser, Content: []fantasy.MessagePart{fantasy.TextPart{Text: "hello"}}},
+			{Role: fantasy.MessageRoleAssistant, Content: []fantasy.MessagePart{fantasy.TextPart{Text: "hi"}}},
+		}
+		result := repairOrphanedToolResults(history)
+		assert.Equal(t, len(history), len(result))
+	})
+}
+
 func BenchmarkBuildSummaryPrompt(b *testing.B) {
 	cases := []struct {
 		name     string
