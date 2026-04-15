@@ -27,6 +27,10 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"charm.land/catwalk/pkg/catwalk"
 	"charm.land/lipgloss/v2"
+	uv "github.com/charmbracelet/ultraviolet"
+	layoutpkg "github.com/charmbracelet/ultraviolet/layout"
+	"github.com/charmbracelet/ultraviolet/screen"
+	"github.com/charmbracelet/x/editor"
 	"github.com/zhiqiang-hhhh/smith/internal/agent/notify"
 	agenttools "github.com/zhiqiang-hhhh/smith/internal/agent/tools"
 	"github.com/zhiqiang-hhhh/smith/internal/agent/tools/mcp"
@@ -56,10 +60,6 @@ import (
 	"github.com/zhiqiang-hhhh/smith/internal/update"
 	"github.com/zhiqiang-hhhh/smith/internal/version"
 	"github.com/zhiqiang-hhhh/smith/internal/workspace"
-	uv "github.com/charmbracelet/ultraviolet"
-	layoutpkg "github.com/charmbracelet/ultraviolet/layout"
-	"github.com/charmbracelet/ultraviolet/screen"
-	"github.com/charmbracelet/x/editor"
 )
 
 // MouseScrollThreshold defines how many lines to scroll the chat when a mouse
@@ -1852,6 +1852,8 @@ func (m *UI) openAuthenticationDialog(provider catwalk.Provider, model config.Se
 		dlg, cmd = dialog.NewOAuthHyper(m.com, isOnboarding, provider, model, modelType)
 	case catwalk.InferenceProviderCopilot:
 		dlg, cmd = dialog.NewOAuthCopilot(m.com, isOnboarding, provider, model, modelType)
+	case catwalk.InferenceProviderOpenAI:
+		dlg, cmd = dialog.NewOAuthOpenAI(m.com, isOnboarding, provider, model, modelType)
 	default:
 		dlg, cmd = dialog.NewAPIKeyInput(m.com, isOnboarding, provider, model, modelType)
 	}

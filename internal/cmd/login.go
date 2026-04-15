@@ -9,15 +9,16 @@ import (
 
 	"charm.land/lipgloss/v2"
 	"github.com/atotto/clipboard"
+	"github.com/charmbracelet/x/ansi"
+	"github.com/pkg/browser"
+	"github.com/spf13/cobra"
 	hyperp "github.com/zhiqiang-hhhh/smith/internal/agent/hyper"
 	"github.com/zhiqiang-hhhh/smith/internal/client"
 	"github.com/zhiqiang-hhhh/smith/internal/config"
 	"github.com/zhiqiang-hhhh/smith/internal/oauth"
 	"github.com/zhiqiang-hhhh/smith/internal/oauth/copilot"
 	"github.com/zhiqiang-hhhh/smith/internal/oauth/hyper"
-	"github.com/charmbracelet/x/ansi"
-	"github.com/pkg/browser"
-	"github.com/spf13/cobra"
+	openaiauth "github.com/zhiqiang-hhhh/smith/internal/oauth/openai"
 )
 
 var loginCmd = &cobra.Command{
@@ -26,19 +27,24 @@ var loginCmd = &cobra.Command{
 	Short:   "Login Smith to a platform",
 	Long: `Login Smith to a specified platform.
 The platform should be provided as an argument.
-Available platforms are: hyper, copilot.`,
+Available platforms are: hyper, copilot, openai.`,
 	Example: `
 # Authenticate with Charm Hyper
 smith login
 
 # Authenticate with GitHub Copilot
 smith login copilot
+
+# Authenticate with OpenAI
+smith login openai
   `,
 	ValidArgs: []cobra.Completion{
 		"hyper",
 		"copilot",
 		"github",
 		"github-copilot",
+		"openai",
+		"chatgpt",
 	},
 	Args: cobra.MaximumNArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
@@ -63,6 +69,8 @@ smith login copilot
 			return loginHyper(c, ws.ID)
 		case "copilot", "github", "github-copilot":
 			return loginCopilot(cmd.Context(), c, ws.ID)
+		case "openai", "chatgpt":
+			return loginOpenAI(c, ws.ID)
 		default:
 			return fmt.Errorf("unknown platform: %s", args[0])
 		}
@@ -231,6 +239,54 @@ func loginCopilot(ctx context.Context, c *client.Client, wsID string) error {
 
 	fmt.Println()
 	fmt.Println("You're now authenticated with GitHub Copilot!")
+	return nil
+}
+
+func loginOpenAI(c *client.Client, wsID string) error {
+	ctx := getLoginContext()
+
+	fmt.Println("Requesting device code from OpenAI...")
+	dc, err := openaiauth.RequestDeviceCode(ctx)
+	if err != nil {
+		return err
+	}
+
+	fmt.Println()
+	fmt.Println("Follow these steps to sign in with your OpenAI account:")
+	fmt.Println()
+	fmt.Println("1. Open this link in your browser and sign in to your account")
+	fmt.Println("  ", lipgloss.NewStyle().Hyperlink(dc.VerificationURL, "id=openai").Render(dc.VerificationURL))
+	fmt.Println()
+
+	if clipboard.WriteAll(dc.UserCode) == nil {
+		fmt.Println("2. Enter this one-time code (copied to clipboard, expires in 15 minutes)")
+	} else {
+		fmt.Println("2. Enter this one-time code (expires in 15 minutes)")
+	}
+	fmt.Println("  ", lipgloss.NewStyle().Bold(true).Render(dc.UserCode))
+	fmt.Println()
+
+	fmt.Println("Press enter to open the URL in your browser...")
+	waitEnter()
+	if err := browser.OpenURL(dc.VerificationURL); err != nil {
+		fmt.Println("Could not open the URL. You'll need to manually open the URL in your browser.")
+	}
+
+	fmt.Println("Waiting for authorization...")
+	token, err := openaiauth.PollForToken(ctx, dc)
+	if err != nil {
+		return err
+	}
+
+	if err := cmp.Or(
+		c.SetConfigField(ctx, wsID, config.ScopeGlobal, "providers.openai.api_key", token.AccessToken),
+		c.SetConfigField(ctx, wsID, config.ScopeGlobal, "providers.openai.oauth", token),
+	); err != nil {
+		return err
+	}
+
+	fmt.Println()
+	fmt.Println("You're now authenticated with OpenAI!")
 	return nil
 }
 

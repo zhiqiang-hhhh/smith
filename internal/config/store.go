@@ -11,14 +11,15 @@ import (
 	"slices"
 
 	"charm.land/catwalk/pkg/catwalk"
+	"github.com/gofrs/flock"
+	"github.com/tidwall/gjson"
+	"github.com/tidwall/sjson"
 	hyperp "github.com/zhiqiang-hhhh/smith/internal/agent/hyper"
 	"github.com/zhiqiang-hhhh/smith/internal/env"
 	"github.com/zhiqiang-hhhh/smith/internal/oauth"
 	"github.com/zhiqiang-hhhh/smith/internal/oauth/copilot"
 	"github.com/zhiqiang-hhhh/smith/internal/oauth/hyper"
-	"github.com/gofrs/flock"
-	"github.com/tidwall/gjson"
-	"github.com/tidwall/sjson"
+	openaiauth "github.com/zhiqiang-hhhh/smith/internal/oauth/openai"
 )
 
 // fileSnapshot captures metadata about a config file at a point in time.
@@ -383,6 +384,8 @@ func (s *ConfigStore) RefreshOAuthToken(ctx context.Context, scope Scope, provid
 		newToken, refreshErr = copilot.RefreshToken(ctx, providerConfig.OAuthToken.RefreshToken)
 	case hyperp.Name:
 		newToken, refreshErr = hyper.ExchangeToken(ctx, providerConfig.OAuthToken.RefreshToken)
+	case string(catwalk.InferenceProviderOpenAI):
+		newToken, refreshErr = openaiauth.RefreshToken(ctx, providerConfig.OAuthToken.RefreshToken)
 	default:
 		return fmt.Errorf("OAuth refresh not supported for provider %s", providerID)
 	}
