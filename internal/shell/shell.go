@@ -83,12 +83,12 @@ func NewShell(opts *Options) *Shell {
 		env = os.Environ()
 	}
 
-	// Allow tools to detect execution by Crush.
+	// Allow tools to detect execution by Smith.
 	env = append(
 		env,
-		"CRUSH=1",
-		"AGENT=crush",
-		"AI_AGENT=crush",
+		"SMITH=1",
+		"AGENT=smith",
+		"AI_AGENT=smith",
 	)
 
 	// Prevent child processes (e.g. git) from opening interactive editors.

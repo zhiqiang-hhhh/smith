@@ -10,8 +10,8 @@ import (
 	"sync"
 
 	"charm.land/fantasy"
-	"github.com/charmbracelet/crush/internal/csync"
-	"github.com/charmbracelet/crush/internal/lsp"
+	"github.com/zhiqiang-hhhh/smith/internal/csync"
+	"github.com/zhiqiang-hhhh/smith/internal/lsp"
 )
 
 const LSPRestartToolName = "lsp_restart"

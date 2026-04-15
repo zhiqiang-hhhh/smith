@@ -1,4 +1,4 @@
-// Package logo renders a Crush wordmark in a stylized way.
+// Package logo renders a Smith wordmark in a stylized way.
 package logo
 
 import (
@@ -8,7 +8,7 @@ import (
 
 	"charm.land/lipgloss/v2"
 	"github.com/MakeNowJust/heredoc"
-	"github.com/charmbracelet/crush/internal/ui/styles"
+	"github.com/zhiqiang-hhhh/smith/internal/ui/styles"
 	"github.com/charmbracelet/x/ansi"
 	"github.com/charmbracelet/x/exp/slice"
 )
@@ -19,7 +19,7 @@ type letterform func(bool) string
 
 const diag = `╱`
 
-// Opts are the options for rendering the Crush title art.
+// Opts are the options for rendering the Smith title art.
 type Opts struct {
 	FieldColor   color.Color // diagonal lines
 	TitleColorA  color.Color // left gradient ramp point
@@ -29,7 +29,7 @@ type Opts struct {
 	Width        int         // width of the rendered logo, used for truncation
 }
 
-// Render renders the Crush logo. Set the argument to true to render the narrow
+// Render renders the Smith logo. Set the argument to true to render the narrow
 // version, intended for use in a sidebar.
 //
 // The compact argument determines whether it renders compact for the sidebar
@@ -55,31 +55,31 @@ func Render(s *styles.Styles, version string, compact bool, o Opts) string {
 		stretchIndex = cachedRandN(len(letterforms))
 	}
 
-	crush := renderWord(spacing, stretchIndex, letterforms...)
-	crushWidth := lipgloss.Width(crush)
+	smith := renderWord(spacing, stretchIndex, letterforms...)
+	smithWidth := lipgloss.Width(smith)
 	b := new(strings.Builder)
-	for r := range strings.SplitSeq(crush, "\n") {
+	for r := range strings.SplitSeq(smith, "\n") {
 		fmt.Fprintln(b, styles.ApplyForegroundGrad(s, r, o.TitleColorA, o.TitleColorB))
 	}
-	crush = b.String()
+	smith = b.String()
 
 	// Charm and version.
 	metaRowGap := 1
-	maxVersionWidth := crushWidth - lipgloss.Width(charm) - metaRowGap
+	maxVersionWidth := smithWidth - lipgloss.Width(charm) - metaRowGap
 	version = ansi.Truncate(version, maxVersionWidth, "…") // truncate version if too long.
-	gap := max(0, crushWidth-lipgloss.Width(charm)-lipgloss.Width(version))
+	gap := max(0, smithWidth-lipgloss.Width(charm)-lipgloss.Width(version))
 	metaRow := fg(o.CharmColor, charm) + strings.Repeat(" ", gap) + fg(o.VersionColor, version)
 
-	// Join the meta row and big Crush title.
-	crush = strings.TrimSpace(metaRow + "\n" + crush)
+	// Join the meta row and big Smith title.
+	smith = strings.TrimSpace(metaRow + "\n" + smith)
 
 	// Narrow version.
 	if compact {
-		field := fg(o.FieldColor, strings.Repeat(diag, crushWidth))
-		return strings.Join([]string{field, field, crush, field, ""}, "\n")
+		field := fg(o.FieldColor, strings.Repeat(diag, smithWidth))
+		return strings.Join([]string{field, field, smith, field, ""}, "\n")
 	}
 
-	fieldHeight := lipgloss.Height(crush)
+	fieldHeight := lipgloss.Height(smith)
 
 	// Left field.
 	const leftWidth = 6
@@ -90,7 +90,7 @@ func Render(s *styles.Styles, version string, compact bool, o Opts) string {
 	}
 
 	// Right field.
-	rightWidth := max(15, o.Width-crushWidth-leftWidth-2) // 2 for the gap.
+	rightWidth := max(15, o.Width-smithWidth-leftWidth-2) // 2 for the gap.
 	const stepDownAt = 0
 	rightField := new(strings.Builder)
 	for i := range fieldHeight {
@@ -103,7 +103,7 @@ func Render(s *styles.Styles, version string, compact bool, o Opts) string {
 
 	// Return the wide version.
 	const hGap = " "
-	logo := lipgloss.JoinHorizontal(lipgloss.Top, leftField.String(), hGap, crush, hGap, rightField.String())
+	logo := lipgloss.JoinHorizontal(lipgloss.Top, leftField.String(), hGap, smith, hGap, rightField.String())
 	if o.Width > 0 {
 		// Truncate the logo to the specified width.
 		lines := strings.Split(logo, "\n")
@@ -115,7 +115,7 @@ func Render(s *styles.Styles, version string, compact bool, o Opts) string {
 	return logo
 }
 
-// LandingRender renders a clean, centered Crush logo for the landing page.
+// LandingRender renders a clean, centered Smith logo for the landing page.
 // No flanking diagonal fields, no meta row — just the gradient block letters.
 func LandingRender(t *styles.Styles, colorA, colorB color.Color) string {
 	const spacing = 1
@@ -126,20 +126,20 @@ func LandingRender(t *styles.Styles, colorA, colorB color.Color) string {
 		letterSStylized,
 		letterH,
 	}
-	crush := renderWord(spacing, -1, letterforms...)
+	smith := renderWord(spacing, -1, letterforms...)
 	b := new(strings.Builder)
-	for r := range strings.SplitSeq(crush, "\n") {
+	for r := range strings.SplitSeq(smith, "\n") {
 		fmt.Fprintln(b, styles.ApplyBoldForegroundGrad(t, r, colorA, colorB))
 	}
 	return strings.TrimRight(b.String(), "\n")
 }
 
-// SmallRender renders a smaller version of the Crush logo, suitable for
+// SmallRender renders a smaller version of the Smith logo, suitable for
 // smaller windows or sidebar usage.
 func SmallRender(t *styles.Styles, width int) string {
 	title := t.Base.Foreground(t.Secondary).Render("Charm™")
-	title = fmt.Sprintf("%s %s", title, styles.ApplyBoldForegroundGrad(t, "Crush", t.Secondary, t.Primary))
-	remainingWidth := width - lipgloss.Width(title) - 1 // 1 for the space after "Crush"
+	title = fmt.Sprintf("%s %s", title, styles.ApplyBoldForegroundGrad(t, "Smith", t.Secondary, t.Primary))
+	remainingWidth := width - lipgloss.Width(title) - 1 // 1 for the space after "Smith"
 	if remainingWidth > 0 {
 		lines := strings.Repeat("╱", remainingWidth)
 		title = fmt.Sprintf("%s %s", title, t.Base.Foreground(t.Primary).Render(lines))

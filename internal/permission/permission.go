@@ -11,8 +11,8 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/charmbracelet/crush/internal/csync"
-	"github.com/charmbracelet/crush/internal/pubsub"
+	"github.com/zhiqiang-hhhh/smith/internal/csync"
+	"github.com/zhiqiang-hhhh/smith/internal/pubsub"
 	"github.com/google/uuid"
 )
 

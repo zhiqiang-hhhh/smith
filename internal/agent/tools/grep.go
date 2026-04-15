@@ -19,9 +19,9 @@ import (
 	"time"
 
 	"charm.land/fantasy"
-	"github.com/charmbracelet/crush/internal/config"
-	"github.com/charmbracelet/crush/internal/csync"
-	"github.com/charmbracelet/crush/internal/fsext"
+	"github.com/zhiqiang-hhhh/smith/internal/config"
+	"github.com/zhiqiang-hhhh/smith/internal/csync"
+	"github.com/zhiqiang-hhhh/smith/internal/fsext"
 )
 
 // regexCache provides thread-safe caching of compiled regex patterns
@@ -240,7 +240,7 @@ func searchWithRipgrep(ctx context.Context, pattern, path, include string, conte
 	}
 
 	// Only add ignore files if they exist
-	for _, ignoreFile := range []string{".gitignore", ".crushignore"} {
+	for _, ignoreFile := range []string{".gitignore", ".smithignore"} {
 		ignorePath := filepath.Join(path, ignoreFile)
 		if _, err := os.Stat(ignorePath); err == nil {
 			cmd.Args = append(cmd.Args, "--ignore-file", ignorePath)
@@ -341,7 +341,7 @@ func searchFilesWithRegex(ctx context.Context, pattern, rootPath, include string
 		}
 	}
 
-	// Create walker with gitignore and crushignore support
+	// Create walker with gitignore and smithignore support
 	walker := fsext.NewFastGlobWalker(rootPath)
 
 	err = filepath.Walk(rootPath, func(path string, info os.FileInfo, err error) error {

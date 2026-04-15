@@ -10,10 +10,10 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
 	"charm.land/lipgloss/v2/tree"
-	"github.com/charmbracelet/crush/internal/agent"
-	"github.com/charmbracelet/crush/internal/message"
-	"github.com/charmbracelet/crush/internal/ui/anim"
-	"github.com/charmbracelet/crush/internal/ui/styles"
+	"github.com/zhiqiang-hhhh/smith/internal/agent"
+	"github.com/zhiqiang-hhhh/smith/internal/message"
+	"github.com/zhiqiang-hhhh/smith/internal/ui/anim"
+	"github.com/zhiqiang-hhhh/smith/internal/ui/styles"
 )
 
 // -----------------------------------------------------------------------------

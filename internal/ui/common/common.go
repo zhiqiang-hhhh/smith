@@ -8,12 +8,12 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 	"github.com/atotto/clipboard"
-	"github.com/charmbracelet/crush/internal/app"
-	"github.com/charmbracelet/crush/internal/config"
-	"github.com/charmbracelet/crush/internal/mux"
-	"github.com/charmbracelet/crush/internal/ui/styles"
-	"github.com/charmbracelet/crush/internal/ui/util"
-	"github.com/charmbracelet/crush/internal/workspace"
+	"github.com/zhiqiang-hhhh/smith/internal/app"
+	"github.com/zhiqiang-hhhh/smith/internal/config"
+	"github.com/zhiqiang-hhhh/smith/internal/mux"
+	"github.com/zhiqiang-hhhh/smith/internal/ui/styles"
+	"github.com/zhiqiang-hhhh/smith/internal/ui/util"
+	"github.com/zhiqiang-hhhh/smith/internal/workspace"
 	uv "github.com/charmbracelet/ultraviolet"
 	"github.com/charmbracelet/x/ansi"
 )

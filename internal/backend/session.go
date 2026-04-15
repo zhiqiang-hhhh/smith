@@ -3,9 +3,9 @@ package backend
 import (
 	"context"
 
-	"github.com/charmbracelet/crush/internal/message"
-	"github.com/charmbracelet/crush/internal/proto"
-	"github.com/charmbracelet/crush/internal/session"
+	"github.com/zhiqiang-hhhh/smith/internal/message"
+	"github.com/zhiqiang-hhhh/smith/internal/proto"
+	"github.com/zhiqiang-hhhh/smith/internal/session"
 )
 
 // CreateSession creates a new session in the given workspace.

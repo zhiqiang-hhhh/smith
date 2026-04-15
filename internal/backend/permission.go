@@ -1,8 +1,8 @@
 package backend
 
 import (
-	"github.com/charmbracelet/crush/internal/permission"
-	"github.com/charmbracelet/crush/internal/proto"
+	"github.com/zhiqiang-hhhh/smith/internal/permission"
+	"github.com/zhiqiang-hhhh/smith/internal/proto"
 )
 
 // GrantPermission grants, denies, or persistently grants a permission

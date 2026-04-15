@@ -12,9 +12,9 @@ import (
 	"charm.land/bubbles/v2/key"
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
-	"github.com/charmbracelet/crush/internal/message"
-	"github.com/charmbracelet/crush/internal/ui/common"
-	fimage "github.com/charmbracelet/crush/internal/ui/image"
+	"github.com/zhiqiang-hhhh/smith/internal/message"
+	"github.com/zhiqiang-hhhh/smith/internal/ui/common"
+	fimage "github.com/zhiqiang-hhhh/smith/internal/ui/image"
 	uv "github.com/charmbracelet/ultraviolet"
 )
 

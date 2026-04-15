@@ -1,9 +1,9 @@
-// Package search provides full-text search indexing and querying for Crush
+// Package search provides full-text search indexing and querying for Smith
 // sessions across all project databases.
 //
-// The indexer reads messages from each project's crush.db, extracts text from
+// The indexer reads messages from each project's smith.db, extracts text from
 // the JSON parts array, converts Chinese characters to pinyin, and inserts
-// into FTS5 tables in a single index database (~/.crush/search.db).
+// into FTS5 tables in a single index database (~/.smith/search.db).
 //
 // Incremental updates track last_message_rowid per source DB in a meta table.
 package search
@@ -29,7 +29,7 @@ type Project struct {
 }
 
 // part represents one element of the messages.parts JSON array.
-// Crush format: {"type":"text","data":{"text":"..."}}
+// Smith format: {"type":"text","data":{"text":"..."}}
 type part struct {
 	Type string   `json:"type"`
 	Data partData `json:"data"`
@@ -40,14 +40,14 @@ type partData struct {
 }
 
 // IndexDBPath returns the path to the FTS5 index database.
-// On Unix: ~/.crush/search.db
-// On Windows: %APPDATA%/crush/search.db
+// On Unix: ~/.smith/search.db
+// On Windows: %APPDATA%/smith/search.db
 func IndexDBPath() (string, error) {
 	configDir, err := os.UserConfigDir()
 	if err != nil {
 		return "", fmt.Errorf("get config dir: %w", err)
 	}
-	return filepath.Join(configDir, "crush", "search.db"), nil
+	return filepath.Join(configDir, "smith", "search.db"), nil
 }
 
 // openIndexDB opens the index database with WAL mode and creates tables if needed.
@@ -110,8 +110,8 @@ func createIndexTables(db *sql.DB) error {
 // into the FTS5 index. Only messages with rowid greater than the last indexed
 // rowid are processed.
 func UpdateIndex(projects []Project) error {
-	crushDBs := discoverDBs(projects)
-	if len(crushDBs) == 0 {
+	smithDBs := discoverDBs(projects)
+	if len(smithDBs) == 0 {
 		return nil
 	}
 
@@ -124,7 +124,7 @@ func UpdateIndex(projects []Project) error {
 	pinyinArgs := pinyin.NewArgs()
 	pinyinArgs.Style = pinyin.Normal
 
-	for _, dbPath := range crushDBs {
+	for _, dbPath := range smithDBs {
 		if err := indexOneDB(idxConn, dbPath, pinyinArgs); err != nil {
 			// Log but continue with other DBs.
 			continue
@@ -137,8 +137,8 @@ func UpdateIndex(projects []Project) error {
 // RebuildIndex clears the entire FTS5 index and re-indexes all messages
 // from all project databases.
 func RebuildIndex(projects []Project) error {
-	crushDBs := discoverDBs(projects)
-	if len(crushDBs) == 0 {
+	smithDBs := discoverDBs(projects)
+	if len(smithDBs) == 0 {
 		return nil
 	}
 
@@ -162,7 +162,7 @@ func RebuildIndex(projects []Project) error {
 	pinyinArgs := pinyin.NewArgs()
 	pinyinArgs.Style = pinyin.Normal
 
-	for _, dbPath := range crushDBs {
+	for _, dbPath := range smithDBs {
 		if err := indexOneDB(idxConn, dbPath, pinyinArgs); err != nil {
 			continue
 		}
@@ -171,12 +171,12 @@ func RebuildIndex(projects []Project) error {
 	return nil
 }
 
-// discoverDBs returns paths to existing crush.db files across all projects.
+// discoverDBs returns paths to existing smith.db files across all projects.
 func discoverDBs(projects []Project) []string {
 	seen := make(map[string]bool)
 	var dbs []string
 	for _, p := range projects {
-		db := filepath.Join(p.DataDir, "crush.db")
+		db := filepath.Join(p.DataDir, "smith.db")
 		if seen[db] {
 			continue
 		}
@@ -188,17 +188,17 @@ func discoverDBs(projects []Project) []string {
 	return dbs
 }
 
-func indexOneDB(idxConn *sql.DB, crushDBPath string, pinyinArgs pinyin.Args) error {
-	metaKey := "last_rowid:" + crushDBPath
+func indexOneDB(idxConn *sql.DB, smithDBPath string, pinyinArgs pinyin.Args) error {
+	metaKey := "last_rowid:" + smithDBPath
 
 	params := url.Values{}
 	params.Set("mode", "ro")
 	params.Add("_pragma", "journal_mode(WAL)")
 
-	dsn := fmt.Sprintf("file:%s?%s", crushDBPath, params.Encode())
+	dsn := fmt.Sprintf("file:%s?%s", smithDBPath, params.Encode())
 	srcConn, err := sql.Open("sqlite", dsn)
 	if err != nil {
-		return fmt.Errorf("open %s: %w", crushDBPath, err)
+		return fmt.Errorf("open %s: %w", smithDBPath, err)
 	}
 	defer srcConn.Close()
 
@@ -211,7 +211,7 @@ func indexOneDB(idxConn *sql.DB, crushDBPath string, pinyinArgs pinyin.Args) err
 		WHERE parent_session_id IS NOT NULL AND parent_session_id != ''
 	`)
 	if err != nil {
-		return fmt.Errorf("query parents %s: %w", crushDBPath, err)
+		return fmt.Errorf("query parents %s: %w", smithDBPath, err)
 	}
 	for prows.Next() {
 		var id, parent string
@@ -229,7 +229,7 @@ func indexOneDB(idxConn *sql.DB, crushDBPath string, pinyinArgs pinyin.Args) err
 		ORDER BY rowid ASC
 	`, lastRowID)
 	if err != nil {
-		return fmt.Errorf("query messages %s: %w", crushDBPath, err)
+		return fmt.Errorf("query messages %s: %w", smithDBPath, err)
 	}
 	defer rows.Close()
 
@@ -296,7 +296,7 @@ func indexOneDB(idxConn *sql.DB, crushDBPath string, pinyinArgs pinyin.Args) err
 	}
 	if err := rows.Err(); err != nil {
 		tx.Rollback()
-		return fmt.Errorf("rows error %s: %w", crushDBPath, err)
+		return fmt.Errorf("rows error %s: %w", smithDBPath, err)
 	}
 
 	if maxRowID > lastRowID {

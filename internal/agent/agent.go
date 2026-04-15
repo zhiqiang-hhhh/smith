@@ -1,4 +1,4 @@
-// Package agent is the core orchestration layer for Crush AI agents.
+// Package agent is the core orchestration layer for Smith AI agents.
 //
 // It provides session-based AI agent functionality for managing
 // conversations, tool execution, and message handling. It coordinates
@@ -34,20 +34,20 @@ import (
 	"charm.land/fantasy/providers/openrouter"
 	"charm.land/fantasy/providers/vercel"
 	"charm.land/lipgloss/v2"
-	"github.com/charmbracelet/crush/internal/agent/hyper"
-	"github.com/charmbracelet/crush/internal/agent/notify"
-	"github.com/charmbracelet/crush/internal/agent/tools"
-	"github.com/charmbracelet/crush/internal/agent/tools/mcp"
-	"github.com/charmbracelet/crush/internal/config"
-	"github.com/charmbracelet/crush/internal/csync"
-	"github.com/charmbracelet/crush/internal/filetracker"
-	"github.com/charmbracelet/crush/internal/message"
-	"github.com/charmbracelet/crush/internal/permission"
-	"github.com/charmbracelet/crush/internal/pubsub"
-	"github.com/charmbracelet/crush/internal/session"
-	"github.com/charmbracelet/crush/internal/stringext"
-	"github.com/charmbracelet/crush/internal/trace"
-	"github.com/charmbracelet/crush/internal/version"
+	"github.com/zhiqiang-hhhh/smith/internal/agent/hyper"
+	"github.com/zhiqiang-hhhh/smith/internal/agent/notify"
+	"github.com/zhiqiang-hhhh/smith/internal/agent/tools"
+	"github.com/zhiqiang-hhhh/smith/internal/agent/tools/mcp"
+	"github.com/zhiqiang-hhhh/smith/internal/config"
+	"github.com/zhiqiang-hhhh/smith/internal/csync"
+	"github.com/zhiqiang-hhhh/smith/internal/filetracker"
+	"github.com/zhiqiang-hhhh/smith/internal/message"
+	"github.com/zhiqiang-hhhh/smith/internal/permission"
+	"github.com/zhiqiang-hhhh/smith/internal/pubsub"
+	"github.com/zhiqiang-hhhh/smith/internal/session"
+	"github.com/zhiqiang-hhhh/smith/internal/stringext"
+	"github.com/zhiqiang-hhhh/smith/internal/trace"
+	"github.com/zhiqiang-hhhh/smith/internal/version"
 )
 
 const (
@@ -75,7 +75,7 @@ const (
 	streamIdleTimeout = 2 * time.Minute
 )
 
-var userAgent = fmt.Sprintf("Charm-Crush/%s (https://charm.land/crush)", version.Version)
+var userAgent = fmt.Sprintf("Charm-Smith/%s (https://charm.land/smith)", version.Version)
 
 // contextTooLargePattern is a fallback regex for detecting context-too-large
 // errors that the provider SDK doesn't recognize. This covers error formats
@@ -759,7 +759,7 @@ func (a *sessionAgent) Run(ctx context.Context, call SessionAgentCall) (*fantasy
 		} else if isPermissionErr {
 			currentAssistant.AddFinish(message.FinishReasonPermissionDenied, "User denied permission", "")
 		} else if errors.Is(err, hyper.ErrUnauthorized) {
-			currentAssistant.AddFinish(message.FinishReasonError, "Unauthorized", `Please re-authenticate with Hyper. You can also run "crush auth" to re-authenticate.`)
+			currentAssistant.AddFinish(message.FinishReasonError, "Unauthorized", `Please re-authenticate with Hyper. You can also run "smith auth" to re-authenticate.`)
 			if a.notify != nil {
 				a.notify.Publish(pubsub.CreatedEvent, notify.Notification{
 					SessionID:    call.SessionID,
@@ -1053,7 +1053,7 @@ func (a *sessionAgent) Summarize(ctx context.Context, sessionID string, opts fan
 }
 
 func (a *sessionAgent) getCacheControlOptions() fantasy.ProviderOptions {
-	if t, _ := strconv.ParseBool(os.Getenv("CRUSH_DISABLE_ANTHROPIC_CACHE")); t {
+	if t, _ := strconv.ParseBool(os.Getenv("SMITH_DISABLE_ANTHROPIC_CACHE")); t {
 		return fantasy.ProviderOptions{}
 	}
 	return fantasy.ProviderOptions{

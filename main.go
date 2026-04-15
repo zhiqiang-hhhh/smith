@@ -1,12 +1,12 @@
-// Package main is the entry point for the Crush CLI.
+// Package main is the entry point for the Smith CLI.
 //
-//	@title			Crush API
+//	@title			Smith API
 //	@version		1.0
-//	@description	Crush is a terminal-based AI coding assistant. This API is served over a Unix socket (or Windows named pipe) and provides programmatic access to workspaces, sessions, agents, LSP, MCP, and more.
+//	@description	Smith is a terminal-based AI coding assistant. This API is served over a Unix socket (or Windows named pipe) and provides programmatic access to workspaces, sessions, agents, LSP, MCP, and more.
 //	@contact.name	Charm
 //	@contact.url	https://charm.sh
 //	@license.name	MIT
-//	@license.url	https://github.com/charmbracelet/crush/blob/main/LICENSE
+//	@license.url	https://github.com/zhiqiang-hhhh/smith/blob/main/LICENSE
 //	@BasePath		/v1
 package main
 
@@ -16,12 +16,12 @@ import (
 	_ "net/http/pprof"
 	"os"
 
-	"github.com/charmbracelet/crush/internal/cmd"
+	"github.com/zhiqiang-hhhh/smith/internal/cmd"
 	_ "github.com/joho/godotenv/autoload"
 )
 
 func main() {
-	if os.Getenv("CRUSH_PROFILE") != "" {
+	if os.Getenv("SMITH_PROFILE") != "" {
 		go func() {
 			slog.Info("Serving pprof at localhost:6060")
 			if httpErr := http.ListenAndServe("localhost:6060", nil); httpErr != nil {

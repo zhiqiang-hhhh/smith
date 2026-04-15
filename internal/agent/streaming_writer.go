@@ -5,8 +5,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/charmbracelet/crush/internal/message"
-	"github.com/charmbracelet/crush/internal/pubsub"
+	"github.com/zhiqiang-hhhh/smith/internal/message"
+	"github.com/zhiqiang-hhhh/smith/internal/pubsub"
 )
 
 // streamingWriteInterval is the minimum interval between DB writes during

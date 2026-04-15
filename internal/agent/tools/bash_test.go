@@ -6,10 +6,10 @@ import (
 	"testing"
 
 	"charm.land/fantasy"
-	"github.com/charmbracelet/crush/internal/config"
-	"github.com/charmbracelet/crush/internal/permission"
-	"github.com/charmbracelet/crush/internal/pubsub"
-	"github.com/charmbracelet/crush/internal/shell"
+	"github.com/zhiqiang-hhhh/smith/internal/config"
+	"github.com/zhiqiang-hhhh/smith/internal/permission"
+	"github.com/zhiqiang-hhhh/smith/internal/pubsub"
+	"github.com/zhiqiang-hhhh/smith/internal/shell"
 	"github.com/stretchr/testify/require"
 )
 

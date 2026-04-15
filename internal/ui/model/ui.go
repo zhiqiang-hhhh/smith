@@ -27,35 +27,35 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"charm.land/catwalk/pkg/catwalk"
 	"charm.land/lipgloss/v2"
-	"github.com/charmbracelet/crush/internal/agent/notify"
-	agenttools "github.com/charmbracelet/crush/internal/agent/tools"
-	"github.com/charmbracelet/crush/internal/agent/tools/mcp"
-	"github.com/charmbracelet/crush/internal/app"
-	"github.com/charmbracelet/crush/internal/commands"
-	"github.com/charmbracelet/crush/internal/config"
-	"github.com/charmbracelet/crush/internal/fsext"
-	"github.com/charmbracelet/crush/internal/history"
-	"github.com/charmbracelet/crush/internal/home"
-	"github.com/charmbracelet/crush/internal/message"
-	"github.com/charmbracelet/crush/internal/permission"
-	"github.com/charmbracelet/crush/internal/pubsub"
-	"github.com/charmbracelet/crush/internal/search"
-	"github.com/charmbracelet/crush/internal/session"
-	"github.com/charmbracelet/crush/internal/trace"
-	"github.com/charmbracelet/crush/internal/ui/anim"
-	"github.com/charmbracelet/crush/internal/ui/attachments"
-	"github.com/charmbracelet/crush/internal/ui/chat"
-	"github.com/charmbracelet/crush/internal/ui/common"
-	"github.com/charmbracelet/crush/internal/ui/completions"
-	"github.com/charmbracelet/crush/internal/ui/dialog"
-	fimage "github.com/charmbracelet/crush/internal/ui/image"
-	"github.com/charmbracelet/crush/internal/ui/logo"
-	"github.com/charmbracelet/crush/internal/ui/notification"
-	"github.com/charmbracelet/crush/internal/ui/styles"
-	"github.com/charmbracelet/crush/internal/ui/util"
-	"github.com/charmbracelet/crush/internal/update"
-	"github.com/charmbracelet/crush/internal/version"
-	"github.com/charmbracelet/crush/internal/workspace"
+	"github.com/zhiqiang-hhhh/smith/internal/agent/notify"
+	agenttools "github.com/zhiqiang-hhhh/smith/internal/agent/tools"
+	"github.com/zhiqiang-hhhh/smith/internal/agent/tools/mcp"
+	"github.com/zhiqiang-hhhh/smith/internal/app"
+	"github.com/zhiqiang-hhhh/smith/internal/commands"
+	"github.com/zhiqiang-hhhh/smith/internal/config"
+	"github.com/zhiqiang-hhhh/smith/internal/fsext"
+	"github.com/zhiqiang-hhhh/smith/internal/history"
+	"github.com/zhiqiang-hhhh/smith/internal/home"
+	"github.com/zhiqiang-hhhh/smith/internal/message"
+	"github.com/zhiqiang-hhhh/smith/internal/permission"
+	"github.com/zhiqiang-hhhh/smith/internal/pubsub"
+	"github.com/zhiqiang-hhhh/smith/internal/search"
+	"github.com/zhiqiang-hhhh/smith/internal/session"
+	"github.com/zhiqiang-hhhh/smith/internal/trace"
+	"github.com/zhiqiang-hhhh/smith/internal/ui/anim"
+	"github.com/zhiqiang-hhhh/smith/internal/ui/attachments"
+	"github.com/zhiqiang-hhhh/smith/internal/ui/chat"
+	"github.com/zhiqiang-hhhh/smith/internal/ui/common"
+	"github.com/zhiqiang-hhhh/smith/internal/ui/completions"
+	"github.com/zhiqiang-hhhh/smith/internal/ui/dialog"
+	fimage "github.com/zhiqiang-hhhh/smith/internal/ui/image"
+	"github.com/zhiqiang-hhhh/smith/internal/ui/logo"
+	"github.com/zhiqiang-hhhh/smith/internal/ui/notification"
+	"github.com/zhiqiang-hhhh/smith/internal/ui/styles"
+	"github.com/zhiqiang-hhhh/smith/internal/ui/util"
+	"github.com/zhiqiang-hhhh/smith/internal/update"
+	"github.com/zhiqiang-hhhh/smith/internal/version"
+	"github.com/zhiqiang-hhhh/smith/internal/workspace"
 	uv "github.com/charmbracelet/ultraviolet"
 	layoutpkg "github.com/charmbracelet/ultraviolet/layout"
 	"github.com/charmbracelet/ultraviolet/screen"
@@ -575,7 +575,7 @@ func (m *UI) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.notifyWindowFocused = false
 	case app.UpdateAvailableMsg:
 		m.updateAvailable = &msg
-		cmds = append(cmds, util.ReportInfo(fmt.Sprintf("Update available: %s → %s (use Ctrl+P → Update Crush)", msg.CurrentVersion, msg.LatestVersion)))
+		cmds = append(cmds, util.ReportInfo(fmt.Sprintf("Update available: %s → %s (use Ctrl+P → Update Smith)", msg.CurrentVersion, msg.LatestVersion)))
 	case pubsub.Event[notify.Notification]:
 		if cmd := m.handleAgentNotification(msg.Payload); cmd != nil {
 			cmds = append(cmds, cmd)
@@ -773,7 +773,7 @@ func (m *UI) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			cmds = append(cmds, cmd)
 		}
 		if cmd := m.sendNotification(notification.Notification{
-			Title:   "Crush is waiting...",
+			Title:   "Smith is waiting...",
 			Message: fmt.Sprintf("Permission required to execute \"%s\"", msg.Payload.ToolName),
 		}); cmd != nil {
 			cmds = append(cmds, cmd)
@@ -1551,7 +1551,7 @@ func (m *UI) handleDialogMsg(msg tea.Msg) tea.Cmd {
 		m.status.ToggleHelp()
 		m.dialog.CloseDialog(dialog.CommandsID)
 	case dialog.ActionShowVersion:
-		cmds = append(cmds, util.ReportInfo("Crush "+version.Full()))
+		cmds = append(cmds, util.ReportInfo("Smith "+version.Full()))
 		m.dialog.CloseDialog(dialog.CommandsID)
 	case dialog.ActionToggleTrace:
 		if trace.IsActive() {
@@ -2045,7 +2045,7 @@ func (m *UI) handleKeyPressMsg(msg tea.KeyPressMsg) tea.Cmd {
 					return m.openQuitDialog()
 				}
 				if value == "/version" {
-					cmds = append(cmds, util.ReportInfo("Crush "+version.Full()))
+					cmds = append(cmds, util.ReportInfo("Smith "+version.Full()))
 					return nil
 				}
 				if value == "/trace" {
@@ -2401,11 +2401,11 @@ func (m *UI) Draw(scr uv.Screen, area uv.Rectangle) *tea.Cursor {
 		if mcpInfoStr != "" {
 			modelInfo := m.modelInfo(innerWidth)
 			// In landingView: logo + blank + divider + blank + cwd + modelInfo + blank + mcpInfo
-			crushLogoH := lipgloss.Height(logo.LandingRender(m.com.Styles, m.com.Styles.LogoTitleColorA, m.com.Styles.LogoTitleColorB))
+			smithLogoH := lipgloss.Height(logo.LandingRender(m.com.Styles, m.com.Styles.LogoTitleColorA, m.com.Styles.LogoTitleColorB))
 			cwdH := 1
 			modelInfoH := lipgloss.Height(modelInfo)
 			// logo + blank(1) + divider(1) + blank(1) + cwd + modelInfo + blank(1) + mcpInfo
-			mcpOffsetInLanding := crushLogoH + 1 + 1 + 1 + cwdH + modelInfoH + 1
+			mcpOffsetInLanding := smithLogoH + 1 + 1 + 1 + cwdH + modelInfoH + 1
 			mcpH := lipgloss.Height(mcpInfoStr)
 			mcpTopY := dialogRect.Min.Y + 1 + mcpOffsetInLanding // +1 for padding top
 			sortedMCPs := m.com.Config().MCP.Sorted()
@@ -2479,7 +2479,7 @@ func (m *UI) Draw(scr uv.Screen, area uv.Rectangle) *tea.Cursor {
 	}
 
 	// Debugging rendering (visually see when the tui rerenders)
-	if os.Getenv("CRUSH_UI_DEBUG") == "true" {
+	if os.Getenv("SMITH_UI_DEBUG") == "true" {
 		debugView := lipgloss.NewStyle().Background(lipgloss.ANSIColor(rand.Intn(256))).Width(4).Height(2)
 		debug := uv.NewStyledString(debugView.String())
 		debug.Draw(scr, image.Rectangle{
@@ -2532,7 +2532,7 @@ func (m *UI) View() tea.View {
 	}
 	v.MouseMode = tea.MouseModeCellMotion
 	v.ReportFocus = m.caps.ReportFocusEvents
-	v.WindowTitle = "crush " + home.Short(m.com.Workspace.WorkingDir())
+	v.WindowTitle = "smith " + home.Short(m.com.Workspace.WorkingDir())
 
 	canvas := uv.NewScreenBuffer(m.width, m.height)
 	v.Cursor = m.Draw(canvas, canvas.Bounds())
@@ -3043,7 +3043,7 @@ func (m *UI) openEditor(value string) tea.Cmd {
 		return util.ReportError(err)
 	}
 	cmd, err := editor.Command(
-		"crush",
+		"smith",
 		tmpPath,
 		editor.AtPosition(
 			m.textarea.Line()+1,
@@ -3337,7 +3337,7 @@ func (m *UI) forkSessionToMuxWindow(sessionID string) tea.Cmd {
 	}
 }
 
-// openNewMuxWindow opens a fresh crush instance in a new mux window,
+// openNewMuxWindow opens a fresh smith instance in a new mux window,
 // using the current working directory.
 func (m *UI) openNewMuxWindow() tea.Cmd {
 	return func() tea.Msg {
@@ -3352,11 +3352,11 @@ func (m *UI) openNewMuxWindow() tea.Cmd {
 		if err := m.com.Mux.NewWindow(cwd, exe); err != nil {
 			return util.NewErrorMsg(err)
 		}
-		return util.NewInfoMsg("Opened crush in new window")
+		return util.NewInfoMsg("Opened smith in new window")
 	}
 }
 
-// syncTmuxSessionID sets (or clears) the @crush_session pane user option so
+// syncTmuxSessionID sets (or clears) the @smith_session pane user option so
 // that external scripts can discover which session this instance is using.
 // It is a silent no-op when no multiplexer is available.
 func (m *UI) syncTmuxSessionID() {
@@ -3367,7 +3367,7 @@ func (m *UI) syncTmuxSessionID() {
 	if m.session != nil && m.session.ID != "" {
 		val = m.session.ID
 	}
-	m.com.Mux.SetPaneOption("@crush_session", val)
+	m.com.Mux.SetPaneOption("@smith_session", val)
 }
 
 // syncTmuxPaneTitle updates the tmux pane title to reflect the current
@@ -3445,7 +3445,7 @@ func (m *UI) stopTraceAndAnalyze() tea.Cmd {
 		MimeType: "text/plain",
 		Content:  []byte(data),
 	}
-	return m.sendMessage("Analyze the following trace log captured during this Crush session. "+
+	return m.sendMessage("Analyze the following trace log captured during this Smith session. "+
 		"The trace records internal events (agent lifecycle, tool calls, errors, retries, summarization, message manipulation). "+
 		"Identify any anomalies or potential bugs, including but not limited to: "+
 		"orphaned tool_use or tool_result (mismatched IDs), excessive retries or errors, "+
@@ -3783,7 +3783,7 @@ func (m *UI) openOpenDirectoryDialog() tea.Cmd {
 	return nil
 }
 
-// openDirectory opens crush in a new mux window at the given directory path.
+// openDirectory opens smith in a new mux window at the given directory path.
 func (m *UI) openDirectory(path string) tea.Cmd {
 	return func() tea.Msg {
 		if !m.com.Mux.Available() {
@@ -3887,7 +3887,7 @@ func (m *UI) handleAgentNotification(n notify.Notification) tea.Cmd {
 	switch n.Type {
 	case notify.TypeAgentFinished:
 		return m.sendNotification(notification.Notification{
-			Title:   "Crush is waiting...",
+			Title:   "Smith is waiting...",
 			Message: fmt.Sprintf("Agent's turn completed in \"%s\"", n.SessionTitle),
 		})
 	case notify.TypeReAuthenticate:
@@ -4375,7 +4375,7 @@ func (m *UI) selfUpdate() tea.Cmd {
 		if err != nil {
 			return util.ReportError(err)()
 		}
-		return util.NewInfoMsg(fmt.Sprintf("Updated to %s — restart crush to use the new version", newVersion))
+		return util.NewInfoMsg(fmt.Sprintf("Updated to %s — restart smith to use the new version", newVersion))
 	}
 }
 
@@ -4429,7 +4429,7 @@ func (m *UI) persistMCPDisabled(store *config.ConfigStore, name string, disabled
 	return store.RemoveConfigField(scope, key)
 }
 
-// renderLogo renders the Crush logo with the given styles and dimensions.
+// renderLogo renders the Smith logo with the given styles and dimensions.
 func renderLogo(t *styles.Styles, compact bool, width int) string {
 	return logo.Render(t, version.Version, compact, logo.Opts{
 		FieldColor:   t.LogoFieldColor,

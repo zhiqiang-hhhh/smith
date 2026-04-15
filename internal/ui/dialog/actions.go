@@ -8,15 +8,15 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 	"charm.land/catwalk/pkg/catwalk"
-	"github.com/charmbracelet/crush/internal/commands"
-	"github.com/charmbracelet/crush/internal/config"
-	"github.com/charmbracelet/crush/internal/message"
-	"github.com/charmbracelet/crush/internal/oauth"
-	"github.com/charmbracelet/crush/internal/permission"
-	"github.com/charmbracelet/crush/internal/search"
-	"github.com/charmbracelet/crush/internal/session"
-	"github.com/charmbracelet/crush/internal/ui/common"
-	"github.com/charmbracelet/crush/internal/ui/util"
+	"github.com/zhiqiang-hhhh/smith/internal/commands"
+	"github.com/zhiqiang-hhhh/smith/internal/config"
+	"github.com/zhiqiang-hhhh/smith/internal/message"
+	"github.com/zhiqiang-hhhh/smith/internal/oauth"
+	"github.com/zhiqiang-hhhh/smith/internal/permission"
+	"github.com/zhiqiang-hhhh/smith/internal/search"
+	"github.com/zhiqiang-hhhh/smith/internal/session"
+	"github.com/zhiqiang-hhhh/smith/internal/ui/common"
+	"github.com/zhiqiang-hhhh/smith/internal/ui/util"
 )
 
 // ActionClose is a message to close the current dialog.
@@ -93,7 +93,7 @@ type (
 	ActionRefreshCopilotModels struct{}
 	// ActionNewWindow opens a new mux window.
 	ActionNewWindow struct{}
-	// ActionSelfUpdate triggers a self-update of the crush binary.
+	// ActionSelfUpdate triggers a self-update of the smith binary.
 	ActionSelfUpdate struct{}
 	// ActionToggleMCP is a message to enable or disable a specific MCP server.
 	ActionToggleMCP struct {

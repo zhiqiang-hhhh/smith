@@ -28,14 +28,14 @@ func SelfUpdate(ctx context.Context) (string, error) {
 
 	var assetName string
 	if goos == "windows" {
-		assetName = fmt.Sprintf("crush-%s-%s.zip", goos, goarch)
+		assetName = fmt.Sprintf("smith-%s-%s.zip", goos, goarch)
 	} else {
-		assetName = fmt.Sprintf("crush-%s-%s.tar.gz", goos, goarch)
+		assetName = fmt.Sprintf("smith-%s-%s.tar.gz", goos, goarch)
 	}
 
 	var downloadURL string
 	tag := release.TagName
-	downloadURL = fmt.Sprintf("https://github.com/amosbird/crush/releases/download/%s/%s", tag, assetName)
+	downloadURL = fmt.Sprintf("https://github.com/zhiqiang-hhhh/smith/releases/download/%s/%s", tag, assetName)
 
 	exe, err := os.Executable()
 	if err != nil {
@@ -63,7 +63,7 @@ func SelfUpdate(ctx context.Context) (string, error) {
 	// Extract binary to a temp file in the same directory as the current
 	// executable (so rename is atomic on the same filesystem).
 	dir := filepath.Dir(exe)
-	tmpFile, err := os.CreateTemp(dir, "crush-update-*")
+	tmpFile, err := os.CreateTemp(dir, "smith-update-*")
 	if err != nil {
 		return "", fmt.Errorf("failed to create temp file: %w", err)
 	}
@@ -72,9 +72,9 @@ func SelfUpdate(ctx context.Context) (string, error) {
 
 	var binaryName string
 	if goos == "windows" {
-		binaryName = "crush.exe"
+		binaryName = "smith.exe"
 	} else {
-		binaryName = "crush"
+		binaryName = "smith"
 	}
 
 	if strings.HasSuffix(assetName, ".zip") {
@@ -137,7 +137,7 @@ func extractFromTarGz(r io.Reader, name string, w io.Writer) error {
 
 func extractFromZip(r io.Reader, name string, w *os.File) error {
 	// zip needs random access, so buffer to a temp file first.
-	tmp, err := os.CreateTemp("", "crush-zip-*")
+	tmp, err := os.CreateTemp("", "smith-zip-*")
 	if err != nil {
 		return err
 	}

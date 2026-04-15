@@ -4,10 +4,10 @@ import (
 	"strings"
 
 	"charm.land/lipgloss/v2"
-	"github.com/charmbracelet/crush/internal/ui/common"
-	"github.com/charmbracelet/crush/internal/ui/logo"
-	"github.com/charmbracelet/crush/internal/ui/styles"
-	"github.com/charmbracelet/crush/internal/workspace"
+	"github.com/zhiqiang-hhhh/smith/internal/ui/common"
+	"github.com/zhiqiang-hhhh/smith/internal/ui/logo"
+	"github.com/zhiqiang-hhhh/smith/internal/ui/styles"
+	"github.com/zhiqiang-hhhh/smith/internal/workspace"
 )
 
 // selectedLargeModel returns the currently selected large language model from
@@ -26,8 +26,8 @@ func (m *UI) selectedLargeModel() *workspace.AgentModel {
 func (m *UI) landingView(width int) string {
 	t := m.com.Styles
 
-	crushLogo := logo.LandingRender(t, t.LogoTitleColorA, t.LogoTitleColorB)
-	crushLogo = centerText(crushLogo, width)
+	smithLogo := logo.LandingRender(t, t.LogoTitleColorA, t.LogoTitleColorB)
+	smithLogo = centerText(smithLogo, width)
 
 	divider := styles.ApplyForegroundGrad(t,
 		strings.Repeat("─", width),
@@ -38,7 +38,7 @@ func (m *UI) landingView(width int) string {
 	modelInfo := m.modelInfo(width)
 
 	parts := []string{
-		crushLogo,
+		smithLogo,
 		"",
 		divider,
 		"",

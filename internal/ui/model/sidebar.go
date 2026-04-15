@@ -7,11 +7,11 @@ import (
 	"strings"
 
 	"charm.land/lipgloss/v2"
-	"github.com/charmbracelet/crush/internal/agent"
-	"github.com/charmbracelet/crush/internal/ui/common"
-	"github.com/charmbracelet/crush/internal/ui/list"
-	"github.com/charmbracelet/crush/internal/ui/logo"
-	"github.com/charmbracelet/crush/internal/ui/styles"
+	"github.com/zhiqiang-hhhh/smith/internal/agent"
+	"github.com/zhiqiang-hhhh/smith/internal/ui/common"
+	"github.com/zhiqiang-hhhh/smith/internal/ui/list"
+	"github.com/zhiqiang-hhhh/smith/internal/ui/logo"
+	"github.com/zhiqiang-hhhh/smith/internal/ui/styles"
 	uv "github.com/charmbracelet/ultraviolet"
 	"github.com/charmbracelet/ultraviolet/layout"
 )

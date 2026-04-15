@@ -3,10 +3,10 @@ package chat
 import (
 	"encoding/json"
 
-	"github.com/charmbracelet/crush/internal/agent/tools"
-	"github.com/charmbracelet/crush/internal/fsext"
-	"github.com/charmbracelet/crush/internal/message"
-	"github.com/charmbracelet/crush/internal/ui/styles"
+	"github.com/zhiqiang-hhhh/smith/internal/agent/tools"
+	"github.com/zhiqiang-hhhh/smith/internal/fsext"
+	"github.com/zhiqiang-hhhh/smith/internal/message"
+	"github.com/zhiqiang-hhhh/smith/internal/ui/styles"
 )
 
 // -----------------------------------------------------------------------------

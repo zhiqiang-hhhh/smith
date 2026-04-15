@@ -8,10 +8,10 @@ import (
 	"charm.land/bubbles/v2/key"
 	"charm.land/bubbles/v2/textinput"
 	tea "charm.land/bubbletea/v2"
-	"github.com/charmbracelet/crush/internal/projects"
-	"github.com/charmbracelet/crush/internal/ui/common"
-	"github.com/charmbracelet/crush/internal/ui/list"
-	"github.com/charmbracelet/crush/internal/ui/util"
+	"github.com/zhiqiang-hhhh/smith/internal/projects"
+	"github.com/zhiqiang-hhhh/smith/internal/ui/common"
+	"github.com/zhiqiang-hhhh/smith/internal/ui/list"
+	"github.com/zhiqiang-hhhh/smith/internal/ui/util"
 	uv "github.com/charmbracelet/ultraviolet"
 )
 
@@ -22,7 +22,7 @@ type ActionOpenDirectory struct {
 	Path string // absolute path
 }
 
-// OpenDirectory is a dialog for selecting a directory to open crush in.
+// OpenDirectory is a dialog for selecting a directory to open smith in.
 type OpenDirectory struct {
 	com      *common.Common
 	help     help.Model

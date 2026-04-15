@@ -15,7 +15,7 @@ import (
 	"time"
 
 	"charm.land/fantasy"
-	"github.com/charmbracelet/crush/internal/fsext"
+	"github.com/zhiqiang-hhhh/smith/internal/fsext"
 )
 
 const GlobToolName = "glob"

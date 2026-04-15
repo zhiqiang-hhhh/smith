@@ -1,5 +1,5 @@
 // Package mux provides a thin abstraction over terminal multiplexers
-// (tmux, psmux) so that crush features like session-fork-to-new-window
+// (tmux, psmux) so that smith features like session-fork-to-new-window
 // work identically regardless of which multiplexer is running.
 package mux
 
@@ -18,7 +18,7 @@ type Mux struct {
 	paneID string // $TMUX_PANE captured at startup
 }
 
-// Detect returns a *Mux for the current environment, or nil if crush
+// Detect returns a *Mux for the current environment, or nil if smith
 // is not running inside a supported multiplexer.
 func Detect() *Mux {
 	if os.Getenv("TMUX") == "" {
@@ -60,7 +60,7 @@ func (m *Mux) RenameWindow(name string) {
 	}()
 }
 
-// SetPaneOption sets a pane-level user option (e.g. @crush_session).
+// SetPaneOption sets a pane-level user option (e.g. @smith_session).
 func (m *Mux) SetPaneOption(key, value string) {
 	if m == nil {
 		return
@@ -126,15 +126,15 @@ func (m *Mux) PaneCwd() string {
 	return s
 }
 
-// ActiveCrushSessions returns the @crush_session values from all panes.
+// ActiveSmithSessions returns the @smith_session values from all panes.
 // This is used to mark which sessions are currently open.
-func (m *Mux) ActiveCrushSessions() []string {
+func (m *Mux) ActiveSmithSessions() []string {
 	if m == nil {
 		return nil
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
-	out, err := exec.CommandContext(ctx, m.bin, "list-panes", "-a", "-F", "#{@crush_session}").Output()
+	out, err := exec.CommandContext(ctx, m.bin, "list-panes", "-a", "-F", "#{@smith_session}").Output()
 	if err != nil {
 		return nil
 	}
@@ -149,7 +149,7 @@ func (m *Mux) ActiveCrushSessions() []string {
 }
 
 // SelectPaneBySession switches to the mux pane that has the given
-// @crush_session value. It first selects the window containing the pane,
+// @smith_session value. It first selects the window containing the pane,
 // then selects the pane itself. Returns true if such a pane was found.
 func (m *Mux) SelectPaneBySession(sessionID string) bool {
 	if m == nil {
@@ -157,7 +157,7 @@ func (m *Mux) SelectPaneBySession(sessionID string) bool {
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
-	out, err := exec.CommandContext(ctx, m.bin, "list-panes", "-a", "-F", "#{@crush_session} #{window_id} #{pane_id}").Output()
+	out, err := exec.CommandContext(ctx, m.bin, "list-panes", "-a", "-F", "#{@smith_session} #{window_id} #{pane_id}").Output()
 	if err != nil {
 		return false
 	}

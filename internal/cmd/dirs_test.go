@@ -12,8 +12,8 @@ import (
 func init() {
 	os.Setenv("XDG_CONFIG_HOME", "/tmp/fakeconfig")
 	os.Setenv("XDG_DATA_HOME", "/tmp/fakedata")
-	os.Unsetenv("CRUSH_GLOBAL_CONFIG")
-	os.Unsetenv("CRUSH_GLOBAL_DATA")
+	os.Unsetenv("SMITH_GLOBAL_CONFIG")
+	os.Unsetenv("SMITH_GLOBAL_DATA")
 }
 
 func TestDirs(t *testing.T) {
@@ -22,8 +22,8 @@ func TestDirs(t *testing.T) {
 	dirsCmd.SetErr(&b)
 	dirsCmd.SetIn(bytes.NewReader(nil))
 	dirsCmd.Run(dirsCmd, nil)
-	expected := filepath.FromSlash("/tmp/fakeconfig/crush") + "\n" +
-		filepath.FromSlash("/tmp/fakedata/crush") + "\n"
+	expected := filepath.FromSlash("/tmp/fakeconfig/smith") + "\n" +
+		filepath.FromSlash("/tmp/fakedata/smith") + "\n"
 	require.Equal(t, expected, b.String())
 }
 
@@ -33,7 +33,7 @@ func TestConfigDir(t *testing.T) {
 	configDirCmd.SetErr(&b)
 	configDirCmd.SetIn(bytes.NewReader(nil))
 	configDirCmd.Run(configDirCmd, nil)
-	expected := filepath.FromSlash("/tmp/fakeconfig/crush") + "\n"
+	expected := filepath.FromSlash("/tmp/fakeconfig/smith") + "\n"
 	require.Equal(t, expected, b.String())
 }
 
@@ -43,6 +43,6 @@ func TestDataDir(t *testing.T) {
 	dataDirCmd.SetErr(&b)
 	dataDirCmd.SetIn(bytes.NewReader(nil))
 	dataDirCmd.Run(dataDirCmd, nil)
-	expected := filepath.FromSlash("/tmp/fakedata/crush") + "\n"
+	expected := filepath.FromSlash("/tmp/fakedata/smith") + "\n"
 	require.Equal(t, expected, b.String())
 }

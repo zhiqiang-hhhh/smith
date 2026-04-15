@@ -75,14 +75,14 @@ Only create commits when requested by the user. If unclear, ask first.
    Commit message here.
 
 {{ if .Attribution.GeneratedWith }}
-   💘 Generated with Crush
+   💘 Generated with Smith
 {{ end}}
 {{if eq .Attribution.TrailerStyle "assisted-by" }}
 
-   Assisted-by: {{ .ModelName }} via Crush <crush@charm.land>
+   Assisted-by: {{ .ModelName }} via Smith <smith@charm.land>
 {{ else if eq .Attribution.TrailerStyle "co-authored-by" }}
 
-   Co-Authored-By: Crush <crush@charm.land>
+   Co-Authored-By: Smith <smith@charm.land>
 {{ end }}
 
    EOF
@@ -134,7 +134,7 @@ Use gh command for ALL GitHub tasks. When user asks to create PR:
    [Checklist of TODOs...]
 
 {{ if .Attribution.GeneratedWith}}
-   💘 Generated with Crush
+   💘 Generated with Smith
 {{ end }}
 
    EOF

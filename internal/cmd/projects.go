@@ -6,7 +6,7 @@ import (
 
 	"charm.land/lipgloss/v2"
 	"charm.land/lipgloss/v2/table"
-	"github.com/charmbracelet/crush/internal/projects"
+	"github.com/zhiqiang-hhhh/smith/internal/projects"
 	"github.com/charmbracelet/x/term"
 	"github.com/spf13/cobra"
 )
@@ -14,13 +14,13 @@ import (
 var projectsCmd = &cobra.Command{
 	Use:   "projects",
 	Short: "List project directories",
-	Long:  "List directories where Crush project data is known to exist",
+	Long:  "List directories where Smith project data is known to exist",
 	Example: `
 # List all projects in a table
-crush projects
+smith projects
 
 # Output projects data as JSON
-crush projects --json
+smith projects --json
   `,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		jsonOutput, _ := cmd.Flags().GetBool("json")

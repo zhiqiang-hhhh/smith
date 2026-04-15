@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/charmbracelet/crush/internal/db"
+	"github.com/zhiqiang-hhhh/smith/internal/db"
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/require"
 )

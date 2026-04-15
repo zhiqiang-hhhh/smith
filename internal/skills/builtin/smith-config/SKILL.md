@@ -1,21 +1,21 @@
 ---
-name: crush-config
-description: Configure Crush settings including providers, LSPs, MCPs, skills, permissions, and behavior options. Use when the user needs help with crush.json configuration, setting up providers, configuring LSPs, adding MCP servers, or changing Crush behavior.
+name: smith-config
+description: Configure Smith settings including providers, LSPs, MCPs, skills, permissions, and behavior options. Use when the user needs help with smith.json configuration, setting up providers, configuring LSPs, adding MCP servers, or changing Smith behavior.
 ---
 
-# Crush Configuration
+# Smith Configuration
 
-Crush uses JSON configuration files with the following priority (highest to lowest):
+Smith uses JSON configuration files with the following priority (highest to lowest):
 
-1. `.crush.json` (project-local, hidden)
-2. `crush.json` (project-local)
-3. `$XDG_CONFIG_HOME/crush/crush.json` or `$HOME/.config/crush/crush.json` (global)
+1. `.smith.json` (project-local, hidden)
+2. `smith.json` (project-local)
+3. `$XDG_CONFIG_HOME/smith/smith.json` or `$HOME/.config/smith/smith.json` (global)
 
 ## Basic Structure
 
 ```json
 {
-  "$schema": "https://charm.land/crush.json",
+  "$schema": "https://charm.land/smith.json",
   "models": {},
   "providers": {},
   "mcp": {},
@@ -132,7 +132,7 @@ The `$schema` property enables IDE autocomplete but is optional.
   "options": {
     "skills_paths": ["./skills"],
     "disabled_tools": ["bash", "sourcegraph"],
-    "disabled_skills": ["crush-config"],
+    "disabled_skills": ["smith-config"],
     "tui": {
       "compact_mode": false,
       "diff_mode": "unified",
@@ -151,7 +151,7 @@ The `$schema` property enables IDE autocomplete but is optional.
 
 > [!IMPORTANT]
 > The following skill paths are loaded by default and DO NOT NEED to be added to `skills_paths`:
-> `.agents/skills`, `.crush/skills`, `.claude/skills`, `.cursor/skills`
+> `.agents/skills`, `.smith/skills`, `.claude/skills`, `.cursor/skills`
 
 Other options: `context_paths`, `progress`, `disable_notifications`, `disable_auto_summarize`, `disable_metrics`, `disable_provider_auto_update`, `disable_default_providers`, `data_directory`, `initialize_as`.
 
@@ -167,6 +167,6 @@ Other options: `context_paths`, `progress`, `disable_notifications`, `disable_au
 
 ## Environment Variables
 
-- `CRUSH_GLOBAL_CONFIG` - Override global config location
-- `CRUSH_GLOBAL_DATA` - Override data directory location
-- `CRUSH_SKILLS_DIR` - Override default skills directory
+- `SMITH_GLOBAL_CONFIG` - Override global config location
+- `SMITH_GLOBAL_DATA` - Override data directory location
+- `SMITH_SKILLS_DIR` - Override default skills directory

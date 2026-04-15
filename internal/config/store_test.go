@@ -15,31 +15,31 @@ func TestConfigStore_ConfigPath_GlobalAlwaysWorks(t *testing.T) {
 	t.Parallel()
 
 	store := &ConfigStore{
-		globalDataPath: "/some/global/crush.json",
+		globalDataPath: "/some/global/smith.json",
 	}
 
 	path, err := store.configPath(ScopeGlobal)
 	require.NoError(t, err)
-	require.Equal(t, "/some/global/crush.json", path)
+	require.Equal(t, "/some/global/smith.json", path)
 }
 
 func TestConfigStore_ConfigPath_WorkspaceReturnsPath(t *testing.T) {
 	t.Parallel()
 
 	store := &ConfigStore{
-		workspacePath: "/some/workspace/.crush/crush.json",
+		workspacePath: "/some/workspace/.smith/smith.json",
 	}
 
 	path, err := store.configPath(ScopeWorkspace)
 	require.NoError(t, err)
-	require.Equal(t, "/some/workspace/.crush/crush.json", path)
+	require.Equal(t, "/some/workspace/.smith/smith.json", path)
 }
 
 func TestConfigStore_ConfigPath_WorkspaceErrorsWhenEmpty(t *testing.T) {
 	t.Parallel()
 
 	store := &ConfigStore{
-		globalDataPath: "/some/global/crush.json",
+		globalDataPath: "/some/global/smith.json",
 		workspacePath:  "",
 	}
 
@@ -66,7 +66,7 @@ func TestConfigStore_SetConfigField_GlobalScopeAlwaysWorks(t *testing.T) {
 	t.Parallel()
 
 	dir := t.TempDir()
-	globalPath := filepath.Join(dir, "crush.json")
+	globalPath := filepath.Join(dir, "smith.json")
 	store := &ConfigStore{
 		config:         &Config{},
 		globalDataPath: globalPath,
@@ -136,7 +136,7 @@ func TestConfigStore_RuntimeOverrides_MutableViaPointer(t *testing.T) {
 
 func TestGlobalWorkspaceDir(t *testing.T) {
 	dir := t.TempDir()
-	t.Setenv("CRUSH_GLOBAL_DATA", dir)
+	t.Setenv("SMITH_GLOBAL_DATA", dir)
 
 	wsDir := GlobalWorkspaceDir()
 	globalData := GlobalConfigData()
@@ -157,7 +157,7 @@ func TestConfigStaleness_CleanImmediatelyAfterSnapshot(t *testing.T) {
 	t.Parallel()
 
 	dir := t.TempDir()
-	configPath := filepath.Join(dir, "crush.json")
+	configPath := filepath.Join(dir, "smith.json")
 
 	// Create a config file
 	content := []byte(`{"options": {"debug": true}}`)
@@ -179,7 +179,7 @@ func TestConfigStaleness_DetectsFileContentChange(t *testing.T) {
 	t.Parallel()
 
 	dir := t.TempDir()
-	configPath := filepath.Join(dir, "crush.json")
+	configPath := filepath.Join(dir, "smith.json")
 
 	// Create initial config file
 	require.NoError(t, os.WriteFile(configPath, []byte(`{"debug": false}`), 0o600))
@@ -204,7 +204,7 @@ func TestConfigStaleness_DetectsFileDeletion(t *testing.T) {
 	t.Parallel()
 
 	dir := t.TempDir()
-	configPath := filepath.Join(dir, "crush.json")
+	configPath := filepath.Join(dir, "smith.json")
 
 	// Create initial config file
 	require.NoError(t, os.WriteFile(configPath, []byte(`{"debug": true}`), 0o600))
@@ -228,7 +228,7 @@ func TestConfigStaleness_DetectsNewFile(t *testing.T) {
 	t.Parallel()
 
 	dir := t.TempDir()
-	configPath := filepath.Join(dir, "crush.json")
+	configPath := filepath.Join(dir, "smith.json")
 
 	// Don't create file initially
 	store := &ConfigStore{
@@ -283,7 +283,7 @@ func TestConfigStaleness_RefreshClearsDirtyState(t *testing.T) {
 	t.Parallel()
 
 	dir := t.TempDir()
-	configPath := filepath.Join(dir, "crush.json")
+	configPath := filepath.Join(dir, "smith.json")
 
 	// Create initial config file
 	require.NoError(t, os.WriteFile(configPath, []byte(`{"debug": false}`), 0o600))
@@ -319,7 +319,7 @@ func TestReloadFromDisk_UsesNewConfigValues(t *testing.T) {
 	t.Parallel()
 
 	dir := t.TempDir()
-	configPath := filepath.Join(dir, "crush.json")
+	configPath := filepath.Join(dir, "smith.json")
 
 	// Create initial config with one model preference
 	initialConfig := `{
@@ -382,7 +382,7 @@ func TestSetConfigField_AutoReloads(t *testing.T) {
 	t.Parallel()
 
 	dir := t.TempDir()
-	configPath := filepath.Join(dir, "crush.json")
+	configPath := filepath.Join(dir, "smith.json")
 
 	// Create initial config file with debug = false
 	initialConfig := `{"options": {"debug": false}}`
@@ -417,7 +417,7 @@ func TestRemoveConfigField_AutoReloads(t *testing.T) {
 	t.Parallel()
 
 	dir := t.TempDir()
-	configPath := filepath.Join(dir, "crush.json")
+	configPath := filepath.Join(dir, "smith.json")
 
 	// Create initial config file with a custom option
 	initialConfig := `{"options": {"debug": true, "custom_field": "value"}}`
@@ -449,7 +449,7 @@ func TestSetConfigField_AutoReloadSkipsWhenNoWorkingDir(t *testing.T) {
 	t.Parallel()
 
 	dir := t.TempDir()
-	configPath := filepath.Join(dir, "crush.json")
+	configPath := filepath.Join(dir, "smith.json")
 
 	// Create a store without working directory (like some test setups)
 	store := &ConfigStore{
@@ -474,7 +474,7 @@ func TestAutoReloadDisabledDuringReload(t *testing.T) {
 	t.Parallel()
 
 	dir := t.TempDir()
-	configPath := filepath.Join(dir, "crush.json")
+	configPath := filepath.Join(dir, "smith.json")
 
 	// Create initial config with a provider that will trigger config modification during reload
 	// (simulating the anthropic OAuth token removal case)

@@ -6,9 +6,9 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/charmbracelet/crush/internal/projects"
-	"github.com/charmbracelet/crush/internal/ui/list"
-	"github.com/charmbracelet/crush/internal/ui/styles"
+	"github.com/zhiqiang-hhhh/smith/internal/projects"
+	"github.com/zhiqiang-hhhh/smith/internal/ui/list"
+	"github.com/zhiqiang-hhhh/smith/internal/ui/styles"
 	"github.com/dustin/go-humanize"
 	"github.com/sahilm/fuzzy"
 )

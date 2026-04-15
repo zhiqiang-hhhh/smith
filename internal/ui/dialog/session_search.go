@@ -10,11 +10,11 @@ import (
 	"charm.land/bubbles/v2/textinput"
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
-	"github.com/charmbracelet/crush/internal/projects"
-	"github.com/charmbracelet/crush/internal/search"
-	"github.com/charmbracelet/crush/internal/ui/common"
-	"github.com/charmbracelet/crush/internal/ui/list"
-	"github.com/charmbracelet/crush/internal/ui/util"
+	"github.com/zhiqiang-hhhh/smith/internal/projects"
+	"github.com/zhiqiang-hhhh/smith/internal/search"
+	"github.com/zhiqiang-hhhh/smith/internal/ui/common"
+	"github.com/zhiqiang-hhhh/smith/internal/ui/list"
+	"github.com/zhiqiang-hhhh/smith/internal/ui/util"
 	uv "github.com/charmbracelet/ultraviolet"
 	"github.com/charmbracelet/x/ansi"
 )
@@ -146,7 +146,7 @@ func (s *SessionSearch) InitialSearchCmd() tea.Cmd {
 		if err != nil {
 			return sessionSearchResultMsg{err: err}
 		}
-		activeIDs := s.com.Mux.ActiveCrushSessions()
+		activeIDs := s.com.Mux.ActiveSmithSessions()
 		search.MarkActive(results, activeIDs)
 		search.SortResults(results)
 		return sessionSearchResultMsg{results: results}
@@ -306,7 +306,7 @@ func (s *SessionSearch) searchCmd(query string) tea.Cmd {
 		if err != nil {
 			return sessionSearchResultMsg{err: err}
 		}
-		activeIDs := s.com.Mux.ActiveCrushSessions()
+		activeIDs := s.com.Mux.ActiveSmithSessions()
 		search.MarkActive(results, activeIDs)
 		search.SortResults(results)
 		return sessionSearchResultMsg{results: results}

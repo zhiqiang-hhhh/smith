@@ -33,7 +33,7 @@ When literal_text=false (supports standard regex):
 
 <ignore_support>
 - Respects .gitignore patterns to skip ignored files/directories
-- Respects .crushignore patterns for additional ignore rules
+- Respects .smithignore patterns for additional ignore rules
 - Both ignore files auto-detected in search root directory
 - Hidden files (starting with '.') skipped by default
 </ignore_support>

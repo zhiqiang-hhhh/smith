@@ -1,4 +1,4 @@
-Get information about Crush's current runtime configuration and service
+Get information about Smith's current runtime configuration and service
 state.
 
 <usage>
@@ -14,5 +14,5 @@ state.
 - Check [providers] to see which providers are enabled and available
 - Check [skills] to see which skills are available and whether they have been
   loaded this session
-- Pair with the crush-config skill to fix configuration issues
+- Pair with the smith-config skill to fix configuration issues
 </tips>

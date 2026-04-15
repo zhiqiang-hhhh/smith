@@ -9,12 +9,12 @@ import (
 
 	"charm.land/lipgloss/v2"
 	"github.com/atotto/clipboard"
-	hyperp "github.com/charmbracelet/crush/internal/agent/hyper"
-	"github.com/charmbracelet/crush/internal/client"
-	"github.com/charmbracelet/crush/internal/config"
-	"github.com/charmbracelet/crush/internal/oauth"
-	"github.com/charmbracelet/crush/internal/oauth/copilot"
-	"github.com/charmbracelet/crush/internal/oauth/hyper"
+	hyperp "github.com/zhiqiang-hhhh/smith/internal/agent/hyper"
+	"github.com/zhiqiang-hhhh/smith/internal/client"
+	"github.com/zhiqiang-hhhh/smith/internal/config"
+	"github.com/zhiqiang-hhhh/smith/internal/oauth"
+	"github.com/zhiqiang-hhhh/smith/internal/oauth/copilot"
+	"github.com/zhiqiang-hhhh/smith/internal/oauth/hyper"
 	"github.com/charmbracelet/x/ansi"
 	"github.com/pkg/browser"
 	"github.com/spf13/cobra"
@@ -23,16 +23,16 @@ import (
 var loginCmd = &cobra.Command{
 	Aliases: []string{"auth"},
 	Use:     "login [platform]",
-	Short:   "Login Crush to a platform",
-	Long: `Login Crush to a specified platform.
+	Short:   "Login Smith to a platform",
+	Long: `Login Smith to a specified platform.
 The platform should be provided as an argument.
 Available platforms are: hyper, copilot.`,
 	Example: `
 # Authenticate with Charm Hyper
-crush login
+smith login
 
 # Authenticate with GitHub Copilot
-crush login copilot
+smith login copilot
   `,
 	ValidArgs: []cobra.Completion{
 		"hyper",

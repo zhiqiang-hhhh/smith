@@ -1,4 +1,4 @@
-module github.com/charmbracelet/crush
+module github.com/zhiqiang-hhhh/smith
 
 go 1.26.1
 

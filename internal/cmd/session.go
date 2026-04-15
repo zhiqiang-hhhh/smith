@@ -16,14 +16,14 @@ import (
 
 	"charm.land/lipgloss/v2"
 	"github.com/charmbracelet/colorprofile"
-	"github.com/charmbracelet/crush/internal/agent/tools"
-	"github.com/charmbracelet/crush/internal/config"
-	"github.com/charmbracelet/crush/internal/db"
-	"github.com/charmbracelet/crush/internal/event"
-	"github.com/charmbracelet/crush/internal/message"
-	"github.com/charmbracelet/crush/internal/session"
-	"github.com/charmbracelet/crush/internal/ui/chat"
-	"github.com/charmbracelet/crush/internal/ui/styles"
+	"github.com/zhiqiang-hhhh/smith/internal/agent/tools"
+	"github.com/zhiqiang-hhhh/smith/internal/config"
+	"github.com/zhiqiang-hhhh/smith/internal/db"
+	"github.com/zhiqiang-hhhh/smith/internal/event"
+	"github.com/zhiqiang-hhhh/smith/internal/message"
+	"github.com/zhiqiang-hhhh/smith/internal/session"
+	"github.com/zhiqiang-hhhh/smith/internal/ui/chat"
+	"github.com/zhiqiang-hhhh/smith/internal/ui/styles"
 	"github.com/charmbracelet/x/ansi"
 	"github.com/charmbracelet/x/term"
 	"github.com/spf13/cobra"
@@ -33,7 +33,7 @@ var sessionCmd = &cobra.Command{
 	Use:     "session",
 	Aliases: []string{"sessions", "s"},
 	Short:   "Manage sessions",
-	Long:    "Manage Crush sessions. Agents can use --json for machine-readable output.",
+	Long:    "Manage Smith sessions. Agents can use --json for machine-readable output.",
 }
 
 var (
@@ -90,7 +90,7 @@ var sessionForkCmd = &cobra.Command{
 	Short: "Fork a session",
 	Long: `Fork a session by copying all messages, files, and read-files into a new session.
 If no ID is given and running inside tmux, the active session is read from the
-@crush_session pane option. Use --json for machine-readable output.`,
+@smith_session pane option. Use --json for machine-readable output.`,
 	Args: cobra.MaximumNArgs(1),
 	RunE: runSessionFork,
 }
@@ -374,12 +374,12 @@ func runSessionFork(cmd *cobra.Command, args []string) error {
 	if len(args) > 0 {
 		sourceID = args[0]
 	} else if os.Getenv("TMUX") != "" {
-		out, err := exec.CommandContext(ctx, "tmux", "show-option", "-pqv", "@crush_session").Output()
+		out, err := exec.CommandContext(ctx, "tmux", "show-option", "-pqv", "@smith_session").Output()
 		if err == nil {
 			sourceID = strings.TrimSpace(string(out))
 		}
 		if sourceID == "" {
-			return fmt.Errorf("no session ID given and @crush_session pane option is empty")
+			return fmt.Errorf("no session ID given and @smith_session pane option is empty")
 		}
 	} else {
 		return fmt.Errorf("no session ID given (provide one or run inside tmux)")

@@ -19,26 +19,26 @@ import (
 	"charm.land/catwalk/pkg/catwalk"
 	"charm.land/fantasy"
 	"charm.land/lipgloss/v2"
-	"github.com/charmbracelet/crush/internal/agent"
-	"github.com/charmbracelet/crush/internal/agent/notify"
-	"github.com/charmbracelet/crush/internal/agent/tools/mcp"
-	"github.com/charmbracelet/crush/internal/config"
-	"github.com/charmbracelet/crush/internal/db"
-	"github.com/charmbracelet/crush/internal/event"
-	"github.com/charmbracelet/crush/internal/filetracker"
-	"github.com/charmbracelet/crush/internal/format"
-	"github.com/charmbracelet/crush/internal/history"
-	"github.com/charmbracelet/crush/internal/log"
-	"github.com/charmbracelet/crush/internal/lsp"
-	"github.com/charmbracelet/crush/internal/message"
-	"github.com/charmbracelet/crush/internal/permission"
-	"github.com/charmbracelet/crush/internal/pubsub"
-	"github.com/charmbracelet/crush/internal/session"
-	"github.com/charmbracelet/crush/internal/shell"
-	"github.com/charmbracelet/crush/internal/ui/anim"
-	"github.com/charmbracelet/crush/internal/ui/styles"
-	"github.com/charmbracelet/crush/internal/update"
-	"github.com/charmbracelet/crush/internal/version"
+	"github.com/zhiqiang-hhhh/smith/internal/agent"
+	"github.com/zhiqiang-hhhh/smith/internal/agent/notify"
+	"github.com/zhiqiang-hhhh/smith/internal/agent/tools/mcp"
+	"github.com/zhiqiang-hhhh/smith/internal/config"
+	"github.com/zhiqiang-hhhh/smith/internal/db"
+	"github.com/zhiqiang-hhhh/smith/internal/event"
+	"github.com/zhiqiang-hhhh/smith/internal/filetracker"
+	"github.com/zhiqiang-hhhh/smith/internal/format"
+	"github.com/zhiqiang-hhhh/smith/internal/history"
+	"github.com/zhiqiang-hhhh/smith/internal/log"
+	"github.com/zhiqiang-hhhh/smith/internal/lsp"
+	"github.com/zhiqiang-hhhh/smith/internal/message"
+	"github.com/zhiqiang-hhhh/smith/internal/permission"
+	"github.com/zhiqiang-hhhh/smith/internal/pubsub"
+	"github.com/zhiqiang-hhhh/smith/internal/session"
+	"github.com/zhiqiang-hhhh/smith/internal/shell"
+	"github.com/zhiqiang-hhhh/smith/internal/ui/anim"
+	"github.com/zhiqiang-hhhh/smith/internal/ui/styles"
+	"github.com/zhiqiang-hhhh/smith/internal/update"
+	"github.com/zhiqiang-hhhh/smith/internal/version"
 	"github.com/charmbracelet/x/ansi"
 	"github.com/charmbracelet/x/term"
 )
@@ -110,7 +110,7 @@ func New(ctx context.Context, conn *sql.DB, store *config.ConfigStore) (*App, er
 	app.setupEvents()
 
 	// Check for updates in the background.
-	if !store.Config().Options.DisableUpdateCheck && os.Getenv("CRUSH_NO_UPDATE_CHECK") == "" {
+	if !store.Config().Options.DisableUpdateCheck && os.Getenv("SMITH_NO_UPDATE_CHECK") == "" {
 		go app.checkForUpdates(ctx)
 	}
 

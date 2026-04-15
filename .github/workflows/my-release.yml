@@ -49,17 +49,17 @@ jobs:
           VERSION="${GITHUB_REF#refs/tags/}"
           EXT=""
           if [ "${{ matrix.goos }}" = "windows" ]; then EXT=".exe"; fi
-          go build -trimpath -ldflags "-s -w -X github.com/charmbracelet/crush/internal/version.Version=${VERSION}" -o "crush${EXT}" .
+          go build -trimpath -ldflags "-s -w -X github.com/zhiqiang-hhhh/smith/internal/version.Version=${VERSION}" -o "smith${EXT}" .
           if [ "${{ matrix.goos }}" = "windows" ]; then
-            zip "crush-${{ matrix.goos }}-${{ matrix.goarch }}.zip" "crush${EXT}"
+            zip "smith-${{ matrix.goos }}-${{ matrix.goarch }}.zip" "smith${EXT}"
           else
-            tar czf "crush-${{ matrix.goos }}-${{ matrix.goarch }}.tar.gz" "crush${EXT}"
+            tar czf "smith-${{ matrix.goos }}-${{ matrix.goarch }}.tar.gz" "smith${EXT}"
           fi
 
       - uses: actions/upload-artifact@v4
         with:
-          name: crush-${{ matrix.goos }}-${{ matrix.goarch }}
-          path: crush-${{ matrix.goos }}-${{ matrix.goarch }}.*
+          name: smith-${{ matrix.goos }}-${{ matrix.goarch }}
+          path: smith-${{ matrix.goos }}-${{ matrix.goarch }}.*
 
   release:
     needs: build
@@ -72,4 +72,4 @@ jobs:
       - name: Release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: gh release create "${{ github.ref_name }}" crush-*.tar.gz crush-*.zip --generate-notes -R "${{ github.repository }}"
+        run: gh release create "${{ github.ref_name }}" smith-*.tar.gz smith-*.zip --generate-notes -R "${{ github.repository }}"

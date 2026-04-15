@@ -1,8 +1,8 @@
-Read Crush's own application logs.
+Read Smith's own application logs.
 
 <usage>
-- Returns recent log entries from Crush's internal log file
-- Use to diagnose issues with Crush itself (provider errors, tool failures,
+- Returns recent log entries from Smith's internal log file
+- Use to diagnose issues with Smith itself (provider errors, tool failures,
   LSP problems, MCP connection issues)
 - Entries shown in compact format: TIME LEVEL SOURCE MESSAGE key=value...
 </usage>

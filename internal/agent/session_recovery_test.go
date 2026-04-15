@@ -3,7 +3,7 @@ package agent
 import (
 	"testing"
 
-	"github.com/charmbracelet/crush/internal/message"
+	"github.com/zhiqiang-hhhh/smith/internal/message"
 )
 
 func TestWasInterrupted_NoMessages(t *testing.T) {

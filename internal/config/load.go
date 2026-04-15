@@ -18,11 +18,11 @@ import (
 	"time"
 
 	"charm.land/catwalk/pkg/catwalk"
-	"github.com/charmbracelet/crush/internal/agent/hyper"
-	"github.com/charmbracelet/crush/internal/csync"
-	"github.com/charmbracelet/crush/internal/env"
-	"github.com/charmbracelet/crush/internal/fsext"
-	"github.com/charmbracelet/crush/internal/home"
+	"github.com/zhiqiang-hhhh/smith/internal/agent/hyper"
+	"github.com/zhiqiang-hhhh/smith/internal/csync"
+	"github.com/zhiqiang-hhhh/smith/internal/env"
+	"github.com/zhiqiang-hhhh/smith/internal/fsext"
+	"github.com/zhiqiang-hhhh/smith/internal/home"
 	powernapConfig "github.com/charmbracelet/x/powernap/pkg/config"
 	"github.com/qjebbs/go-jsons"
 )
@@ -128,15 +128,15 @@ func mustMarshalConfig(cfg *Config) []byte {
 	return data
 }
 
-func PushPopCrushEnv() func() {
+func PushPopSmithEnv() func() {
 	var found []string
 	for _, ev := range os.Environ() {
-		if strings.HasPrefix(ev, "CRUSH_") {
+		if strings.HasPrefix(ev, "SMITH_") {
 			pair := strings.SplitN(ev, "=", 2)
 			if len(pair) != 2 {
 				continue
 			}
-			found = append(found, strings.TrimPrefix(pair[0], "CRUSH_"))
+			found = append(found, strings.TrimPrefix(pair[0], "SMITH_"))
 		}
 	}
 	backups := make(map[string]string)
@@ -145,7 +145,7 @@ func PushPopCrushEnv() func() {
 	}
 
 	for _, ev := range found {
-		os.Setenv(ev, os.Getenv("CRUSH_"+ev))
+		os.Setenv(ev, os.Getenv("SMITH_"+ev))
 	}
 
 	restore := func() {
@@ -158,7 +158,7 @@ func PushPopCrushEnv() func() {
 
 func (c *Config) configureProviders(store *ConfigStore, env env.Env, resolver VariableResolver, knownProviders []catwalk.Provider) error {
 	knownProviderNames := make(map[string]bool)
-	restore := PushPopCrushEnv()
+	restore := PushPopSmithEnv()
 	defer restore()
 
 	// When disable_default_providers is enabled, skip all default/embedded
@@ -425,11 +425,11 @@ func (c *Config) setDefaults(workingDir, dataDir string) {
 	// Project specific skills dirs.
 	c.Options.SkillsPaths = append(c.Options.SkillsPaths, ProjectSkillsDir(workingDir)...)
 
-	if str, ok := os.LookupEnv("CRUSH_DISABLE_PROVIDER_AUTO_UPDATE"); ok {
+	if str, ok := os.LookupEnv("SMITH_DISABLE_PROVIDER_AUTO_UPDATE"); ok {
 		c.Options.DisableProviderAutoUpdate, _ = strconv.ParseBool(str)
 	}
 
-	if str, ok := os.LookupEnv("CRUSH_DISABLE_DEFAULT_PROVIDERS"); ok {
+	if str, ok := os.LookupEnv("SMITH_DISABLE_DEFAULT_PROVIDERS"); ok {
 		c.Options.DisableDefaultProviders, _ = strconv.ParseBool(str)
 	}
 
@@ -776,8 +776,8 @@ func hasAWSCredentials(env env.Env) bool {
 
 // GlobalConfig returns the global configuration file path for the application.
 func GlobalConfig() string {
-	if crushGlobal := os.Getenv("CRUSH_GLOBAL_CONFIG"); crushGlobal != "" {
-		return filepath.Join(crushGlobal, fmt.Sprintf("%s.json", appName))
+	if smithGlobal := os.Getenv("SMITH_GLOBAL_CONFIG"); smithGlobal != "" {
+		return filepath.Join(smithGlobal, fmt.Sprintf("%s.json", appName))
 	}
 	return filepath.Join(home.Config(), appName, fmt.Sprintf("%s.json", appName))
 }
@@ -785,8 +785,8 @@ func GlobalConfig() string {
 // GlobalCacheDir returns the path to the global cache directory for the
 // application.
 func GlobalCacheDir() string {
-	if crushCache := os.Getenv("CRUSH_CACHE_DIR"); crushCache != "" {
-		return crushCache
+	if smithCache := os.Getenv("SMITH_CACHE_DIR"); smithCache != "" {
+		return smithCache
 	}
 	if xdgCacheHome := os.Getenv("XDG_CACHE_HOME"); xdgCacheHome != "" {
 		return filepath.Join(xdgCacheHome, appName)
@@ -804,16 +804,16 @@ func GlobalCacheDir() string {
 // GlobalConfigData returns the path to the main data directory for the application.
 // this config is used when the app overrides configurations instead of updating the global config.
 func GlobalConfigData() string {
-	if crushData := os.Getenv("CRUSH_GLOBAL_DATA"); crushData != "" {
-		return filepath.Join(crushData, fmt.Sprintf("%s.json", appName))
+	if smithData := os.Getenv("SMITH_GLOBAL_DATA"); smithData != "" {
+		return filepath.Join(smithData, fmt.Sprintf("%s.json", appName))
 	}
 	if xdgDataHome := os.Getenv("XDG_DATA_HOME"); xdgDataHome != "" {
 		return filepath.Join(xdgDataHome, appName, fmt.Sprintf("%s.json", appName))
 	}
 
 	// return the path to the main data directory
-	// for windows, it should be in `%LOCALAPPDATA%/crush/`
-	// for linux and macOS, it should be in `$HOME/.local/share/crush/`
+	// for windows, it should be in `%LOCALAPPDATA%/smith/`
+	// for linux and macOS, it should be in `$HOME/.local/share/smith/`
 	if runtime.GOOS == "windows" {
 		localAppData := cmp.Or(
 			os.Getenv("LOCALAPPDATA"),
@@ -829,8 +829,8 @@ func GlobalConfigData() string {
 // context files (AGENTS.md, etc.) are loaded from. This allows users to
 // define global instructions that apply across all projects.
 func GlobalContextDir() string {
-	if crushGlobal := os.Getenv("CRUSH_GLOBAL_CONFIG"); crushGlobal != "" {
-		return crushGlobal
+	if smithGlobal := os.Getenv("SMITH_GLOBAL_CONFIG"); smithGlobal != "" {
+		return smithGlobal
 	}
 	if xdgConfigHome := os.Getenv("XDG_CONFIG_HOME"); xdgConfigHome != "" {
 		return filepath.Join(xdgConfigHome, appName)
@@ -844,8 +844,8 @@ func GlobalContextDir() string {
 var globalContextFileNames = []string{
 	"AGENTS.md",
 	"CLAUDE.md",
-	"CRUSH.md",
-	"crush.md",
+	"SMITH.md",
+	"smith.md",
 }
 
 // GlobalContextFileNames returns the list of context file names recognized
@@ -884,8 +884,8 @@ func isInsideWorktree() bool {
 // Skills in these directories are auto-discovered and their files can be read
 // without permission prompts.
 func GlobalSkillsDirs() []string {
-	if crushSkills := os.Getenv("CRUSH_SKILLS_DIR"); crushSkills != "" {
-		return []string{crushSkills}
+	if smithSkills := os.Getenv("SMITH_SKILLS_DIR"); smithSkills != "" {
+		return []string{smithSkills}
 	}
 
 	paths := []string{
@@ -893,7 +893,7 @@ func GlobalSkillsDirs() []string {
 		filepath.Join(home.Config(), "agents", "skills"),
 	}
 
-	// On Windows, also load from app data on top of `$HOME/.config/crush`.
+	// On Windows, also load from app data on top of `$HOME/.config/smith`.
 	// This is here mostly for backwards compatibility.
 	if runtime.GOOS == "windows" {
 		appData := cmp.Or(
@@ -910,12 +910,12 @@ func GlobalSkillsDirs() []string {
 	return paths
 }
 
-// ProjectSkillsDir returns the default project directories for which Crush
+// ProjectSkillsDir returns the default project directories for which Smith
 // will look for skills.
 func ProjectSkillsDir(workingDir string) []string {
 	return []string{
 		filepath.Join(workingDir, ".agents/skills"),
-		filepath.Join(workingDir, ".crush/skills"),
+		filepath.Join(workingDir, ".smith/skills"),
 		filepath.Join(workingDir, ".claude/skills"),
 		filepath.Join(workingDir, ".cursor/skills"),
 	}

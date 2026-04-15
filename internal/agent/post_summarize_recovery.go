@@ -7,7 +7,7 @@ import (
 	"os"
 	"strings"
 
-	"github.com/charmbracelet/crush/internal/filetracker"
+	"github.com/zhiqiang-hhhh/smith/internal/filetracker"
 )
 
 const (

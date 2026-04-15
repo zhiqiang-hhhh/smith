@@ -8,7 +8,7 @@ providers (Anthropic, OpenAI, Gemini, Bedrock, Copilot, Hyper, MiniMax,
 Vercel, and more), integrates with LSPs for code intelligence, and supports
 extensibility via MCP servers and agent skills.
 
-The module path is `github.com/charmbracelet/crush`.
+The module path is `github.com/zhiqiang-hhhh/smith`.
 
 ## Architecture
 
@@ -19,7 +19,7 @@ internal/
   cmd/                             CLI commands (root, run, login, models, stats, sessions)
   config/
     config.go                      Config struct, context file paths, agent definitions
-    load.go                        crush.json loading and validation
+    load.go                        smith.json loading and validation
     provider.go                    Provider configuration and model resolution
   agent/
     agent.go                       SessionAgent: runs LLM conversations per session
@@ -62,7 +62,7 @@ internal/
   `.md` description file in `internal/agent/tools/`.
 - **System prompts are Go templates**: `internal/agent/templates/*.md.tpl`
   with runtime data injected.
-- **Context files**: Reads AGENTS.md, CRUSH.md, CLAUDE.md, GEMINI.md
+- **Context files**: Reads AGENTS.md, SMITH.md, CLAUDE.md, GEMINI.md
   (and `.local` variants) from the working directory for project-specific
   instructions.
 - **Persistence**: SQLite + sqlc. All queries live in `internal/db/sql/`,
@@ -74,7 +74,7 @@ internal/
 
 ## Build/Test/Lint Commands
 
-- **Build**: `CGO_ENABLED=0 go build -o crush .` — always output the binary,
+- **Build**: `CGO_ENABLED=0 go build -o smith .` — always output the binary,
   never use bare `go build ./...` for verification only.
 - **Test**: `task test` or `go test ./...` (run single test:
   `go test ./internal/llm/prompt -run TestGetContextFromPaths`)
@@ -89,9 +89,9 @@ internal/
   simplifications)
 - **Dev**: `task dev` (runs with profiling enabled)
 - **Deploy**: After every successful build, rebuild the binary with
-  `CGO_ENABLED=0 GOEXPERIMENT=greenteagc go build -o crush .` in the project
-  root. The wrapper script at `~/scripts/crush` exec's
-  `~/git/crush/crush`, so this replaces the running binary.
+  `CGO_ENABLED=0 GOEXPERIMENT=greenteagc go build -o smith .` in the project
+  root. The wrapper script at `~/scripts/smith` exec's
+  `~/git/smith/smith`, so this replaces the running binary.
 
 ## Code Style Guidelines
 

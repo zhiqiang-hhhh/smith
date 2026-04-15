@@ -11,11 +11,11 @@ import (
 	"slices"
 
 	"charm.land/catwalk/pkg/catwalk"
-	hyperp "github.com/charmbracelet/crush/internal/agent/hyper"
-	"github.com/charmbracelet/crush/internal/env"
-	"github.com/charmbracelet/crush/internal/oauth"
-	"github.com/charmbracelet/crush/internal/oauth/copilot"
-	"github.com/charmbracelet/crush/internal/oauth/hyper"
+	hyperp "github.com/zhiqiang-hhhh/smith/internal/agent/hyper"
+	"github.com/zhiqiang-hhhh/smith/internal/env"
+	"github.com/zhiqiang-hhhh/smith/internal/oauth"
+	"github.com/zhiqiang-hhhh/smith/internal/oauth/copilot"
+	"github.com/zhiqiang-hhhh/smith/internal/oauth/hyper"
 	"github.com/gofrs/flock"
 	"github.com/tidwall/gjson"
 	"github.com/tidwall/sjson"
@@ -43,8 +43,8 @@ type ConfigStore struct {
 	config             *Config
 	workingDir         string
 	resolver           VariableResolver
-	globalDataPath     string   // ~/.local/share/crush/crush.json
-	workspacePath      string   // .crush/crush.json
+	globalDataPath     string   // ~/.local/share/smith/smith.json
+	workspacePath      string   // .smith/smith.json
 	loadedPaths        []string // config files that were successfully loaded
 	knownProviders     []catwalk.Provider
 	overrides          RuntimeOverrides
@@ -314,7 +314,7 @@ func (s *ConfigStore) SetProviderAPIKey(scope Scope, providerID string, apiKey a
 
 // readDiskOAuthToken reads the OAuth token for a provider directly from
 // the config file on disk, bypassing the in-memory cache. This allows
-// detecting tokens refreshed by other crush instances.
+// detecting tokens refreshed by other smith instances.
 func (s *ConfigStore) readDiskOAuthToken(scope Scope, providerID string) *oauth.Token {
 	path, err := s.configPath(scope)
 	if err != nil {
@@ -337,7 +337,7 @@ func (s *ConfigStore) readDiskOAuthToken(scope Scope, providerID string) *oauth.
 }
 
 // RefreshOAuthToken refreshes the OAuth token for the given provider.
-// It uses a file lock to coordinate across multiple crush instances:
+// It uses a file lock to coordinate across multiple smith instances:
 // the first instance to acquire the lock refreshes the token via API,
 // subsequent instances find the refreshed token on disk and reuse it.
 func (s *ConfigStore) RefreshOAuthToken(ctx context.Context, scope Scope, providerID string) error {
@@ -350,7 +350,7 @@ func (s *ConfigStore) RefreshOAuthToken(ctx context.Context, scope Scope, provid
 		return fmt.Errorf("provider %s does not have an OAuth token", providerID)
 	}
 
-	// Acquire file lock to coordinate with other crush instances.
+	// Acquire file lock to coordinate with other smith instances.
 	lockPath, err := s.configPath(scope)
 	if err != nil {
 		return fmt.Errorf("failed to resolve config path: %w", err)

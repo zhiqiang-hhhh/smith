@@ -39,7 +39,7 @@ func Search(projects []Project, query string) ([]SearchResult, error) {
 	if query == "" {
 		var allResults []SearchResult
 		for _, p := range projects {
-			dbPath := filepath.Join(p.DataDir, "crush.db")
+			dbPath := filepath.Join(p.DataDir, "smith.db")
 			if _, err := os.Stat(dbPath); err != nil {
 				continue
 			}
@@ -62,7 +62,7 @@ func Search(projects []Project, query string) ([]SearchResult, error) {
 	var allResults []SearchResult
 
 	for _, p := range projects {
-		dbPath := filepath.Join(p.DataDir, "crush.db")
+		dbPath := filepath.Join(p.DataDir, "smith.db")
 		if _, err := os.Stat(dbPath); err != nil {
 			continue
 		}
@@ -124,7 +124,7 @@ func titleMatchesAllTokens(title string, tokens []string) bool {
 	return true
 }
 
-// searchAllSessions returns all root sessions from a crush.db.
+// searchAllSessions returns all root sessions from a smith.db.
 func searchAllSessions(dbPath, projectPath string) ([]SearchResult, error) {
 	conn, err := openReadOnly(dbPath)
 	if err != nil {
@@ -346,7 +346,7 @@ func DeleteSession(dbPath, sessionID string) error {
 	return tx.Commit()
 }
 
-// openReadWrite opens a crush.db in read-write mode with WAL journal.
+// openReadWrite opens a smith.db in read-write mode with WAL journal.
 func openReadWrite(dbPath string) (*sql.DB, error) {
 	params := url.Values{}
 	params.Set("mode", "rwc")
@@ -361,7 +361,7 @@ func openReadWrite(dbPath string) (*sql.DB, error) {
 	return db, nil
 }
 
-// openReadOnly opens a crush.db in read-only mode with WAL journal.
+// openReadOnly opens a smith.db in read-only mode with WAL journal.
 func openReadOnly(dbPath string) (*sql.DB, error) {
 	params := url.Values{}
 	params.Set("mode", "ro")

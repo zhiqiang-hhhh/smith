@@ -8,8 +8,8 @@ import (
 	"testing"
 
 	"charm.land/catwalk/pkg/catwalk"
-	"github.com/charmbracelet/crush/internal/csync"
-	"github.com/charmbracelet/crush/internal/env"
+	"github.com/zhiqiang-hhhh/smith/internal/csync"
+	"github.com/zhiqiang-hhhh/smith/internal/env"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -53,7 +53,7 @@ func TestConfig_setDefaults(t *testing.T) {
 	require.NotNil(t, cfg.Models)
 	require.NotNil(t, cfg.LSP)
 	require.NotNil(t, cfg.MCP)
-	require.Equal(t, filepath.Join("/tmp", ".crush"), cfg.Options.DataDirectory)
+	require.Equal(t, filepath.Join("/tmp", ".smith"), cfg.Options.DataDirectory)
 	require.Equal(t, "AGENTS.md", cfg.Options.InitializeAs)
 	for _, path := range defaultContextPaths {
 		require.Contains(t, cfg.Options.ContextPaths, path)
@@ -490,7 +490,7 @@ func TestConfig_setupAgentsWithDisabledTools(t *testing.T) {
 	coderAgent, ok := cfg.Agents[AgentCoder]
 	require.True(t, ok)
 
-	assert.Equal(t, []string{"agent", "worker", "bash", "crush_info", "crush_logs", "job_output", "job_kill", "multiedit", "fetch", "agentic_fetch", "glob", "ls", "sourcegraph", "todos", "view", "write", "web_search", "diff", "list_mcp_resources", "read_mcp_resource", "memory_search"}, coderAgent.AllowedTools)
+	assert.Equal(t, []string{"agent", "worker", "bash", "smith_info", "smith_logs", "job_output", "job_kill", "multiedit", "fetch", "agentic_fetch", "glob", "ls", "sourcegraph", "todos", "view", "write", "web_search", "diff", "list_mcp_resources", "read_mcp_resource", "memory_search"}, coderAgent.AllowedTools)
 
 	taskAgent, ok := cfg.Agents[AgentTask]
 	require.True(t, ok)
@@ -517,7 +517,7 @@ func TestConfig_setupAgentsWithEveryReadOnlyToolDisabled(t *testing.T) {
 	cfg.SetupAgents()
 	coderAgent, ok := cfg.Agents[AgentCoder]
 	require.True(t, ok)
-	assert.Equal(t, []string{"agent", "worker", "bash", "crush_info", "crush_logs", "job_output", "job_kill", "download", "edit", "multiedit", "fetch", "agentic_fetch", "todos", "write", "web_search", "diff", "list_mcp_resources", "read_mcp_resource", "memory_search"}, coderAgent.AllowedTools)
+	assert.Equal(t, []string{"agent", "worker", "bash", "smith_info", "smith_logs", "job_output", "job_kill", "download", "edit", "multiedit", "fetch", "agentic_fetch", "todos", "write", "web_search", "diff", "list_mcp_resources", "read_mcp_resource", "memory_search"}, coderAgent.AllowedTools)
 
 	taskAgent, ok := cfg.Agents[AgentTask]
 	require.True(t, ok)
@@ -1293,7 +1293,7 @@ func TestConfig_configureProvidersDisableDefaultProviders(t *testing.T) {
 
 func TestConfig_setDefaultsDisableDefaultProvidersEnvVar(t *testing.T) {
 	t.Run("sets option from environment variable", func(t *testing.T) {
-		t.Setenv("CRUSH_DISABLE_DEFAULT_PROVIDERS", "true")
+		t.Setenv("SMITH_DISABLE_DEFAULT_PROVIDERS", "true")
 
 		cfg := &Config{}
 		cfg.setDefaults("/tmp", "")
@@ -1316,7 +1316,7 @@ func TestConfig_setDefaultsDisableDefaultProvidersEnvVar(t *testing.T) {
 func TestConfig_configureSelectedModels(t *testing.T) {
 	t.Run("reload mode should not persist fallback defaults", func(t *testing.T) {
 		dir := t.TempDir()
-		globalPath := filepath.Join(dir, "crush.json")
+		globalPath := filepath.Join(dir, "smith.json")
 		require.NoError(t, os.WriteFile(globalPath, []byte(`{"models":{"large":{"provider":"ghost","model":"missing"}}}`), 0o600))
 
 		knownProviders := []catwalk.Provider{

@@ -1,6 +1,6 @@
 package agent
 
-import "github.com/charmbracelet/crush/internal/message"
+import "github.com/zhiqiang-hhhh/smith/internal/message"
 
 // wasInterrupted checks if the last assistant message in the conversation was
 // interrupted (crashed or killed mid-response). This is detected by looking

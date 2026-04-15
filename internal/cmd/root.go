@@ -22,22 +22,22 @@ import (
 	fang "charm.land/fang/v2"
 	"charm.land/lipgloss/v2"
 	"github.com/charmbracelet/colorprofile"
-	"github.com/charmbracelet/crush/internal/app"
-	"github.com/charmbracelet/crush/internal/client"
-	"github.com/charmbracelet/crush/internal/config"
-	"github.com/charmbracelet/crush/internal/db"
-	"github.com/charmbracelet/crush/internal/event"
-	"github.com/charmbracelet/crush/internal/home"
-	crushlog "github.com/charmbracelet/crush/internal/log"
-	"github.com/charmbracelet/crush/internal/projects"
-	"github.com/charmbracelet/crush/internal/proto"
-	"github.com/charmbracelet/crush/internal/search"
-	"github.com/charmbracelet/crush/internal/server"
-	"github.com/charmbracelet/crush/internal/session"
-	"github.com/charmbracelet/crush/internal/ui/common"
-	ui "github.com/charmbracelet/crush/internal/ui/model"
-	"github.com/charmbracelet/crush/internal/version"
-	"github.com/charmbracelet/crush/internal/workspace"
+	"github.com/zhiqiang-hhhh/smith/internal/app"
+	"github.com/zhiqiang-hhhh/smith/internal/client"
+	"github.com/zhiqiang-hhhh/smith/internal/config"
+	"github.com/zhiqiang-hhhh/smith/internal/db"
+	"github.com/zhiqiang-hhhh/smith/internal/event"
+	"github.com/zhiqiang-hhhh/smith/internal/home"
+	smithlog "github.com/zhiqiang-hhhh/smith/internal/log"
+	"github.com/zhiqiang-hhhh/smith/internal/projects"
+	"github.com/zhiqiang-hhhh/smith/internal/proto"
+	"github.com/zhiqiang-hhhh/smith/internal/search"
+	"github.com/zhiqiang-hhhh/smith/internal/server"
+	"github.com/zhiqiang-hhhh/smith/internal/session"
+	"github.com/zhiqiang-hhhh/smith/internal/ui/common"
+	ui "github.com/zhiqiang-hhhh/smith/internal/ui/model"
+	"github.com/zhiqiang-hhhh/smith/internal/version"
+	"github.com/zhiqiang-hhhh/smith/internal/workspace"
 	uv "github.com/charmbracelet/ultraviolet"
 	"github.com/charmbracelet/x/ansi"
 	"github.com/charmbracelet/x/term"
@@ -48,9 +48,9 @@ var clientHost string
 
 func init() {
 	rootCmd.PersistentFlags().StringP("cwd", "c", "", "Current working directory")
-	rootCmd.PersistentFlags().StringP("data-dir", "D", "", "Custom crush data directory")
+	rootCmd.PersistentFlags().StringP("data-dir", "D", "", "Custom smith data directory")
 	rootCmd.PersistentFlags().BoolP("debug", "d", false, "Debug")
-	rootCmd.PersistentFlags().StringVarP(&clientHost, "host", "H", server.DefaultHost(), "Connect to a specific crush server host (for advanced users)")
+	rootCmd.PersistentFlags().StringVarP(&clientHost, "host", "H", server.DefaultHost(), "Connect to a specific smith server host (for advanced users)")
 	rootCmd.Flags().BoolP("help", "h", false, "Help")
 	rootCmd.Flags().BoolP("yolo", "y", false, "Automatically accept all permissions (dangerous mode)")
 	rootCmd.Flags().StringP("session", "s", "", "Continue a previous session by ID")
@@ -73,39 +73,39 @@ func init() {
 }
 
 var rootCmd = &cobra.Command{
-	Use:   "crush",
+	Use:   "smith",
 	Short: "A terminal-first AI assistant for software development",
 	Long:  "A glamorous, terminal-first AI assistant for software development and adjacent tasks",
 	Example: `
 # Run in interactive mode
-crush
+smith
 
 # Run non-interactively
-crush run "Guess my 5 favorite Pokémon"
+smith run "Guess my 5 favorite Pokémon"
 
 # Run a non-interactively with pipes and redirection
-cat README.md | crush run "make this more glamorous" > GLAMOROUS_README.md
+cat README.md | smith run "make this more glamorous" > GLAMOROUS_README.md
 
 # Run with debug logging in a specific directory
-crush --debug --cwd /path/to/project
+smith --debug --cwd /path/to/project
 
 # Run in yolo mode (auto-accept all permissions; use with care)
-crush --yolo
+smith --yolo
 
 # Run with custom data directory
-crush --data-dir /path/to/custom/.crush
+smith --data-dir /path/to/custom/.smith
 
 # Continue a previous session
-crush --session {session-id}
+smith --session {session-id}
 
 # Continue the most recent session
-crush --continue
+smith --continue
   `,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		noTmux, _ := cmd.Flags().GetBool("no-tmux")
 		if !noTmux && shouldAutoTmux() {
 			// Re-exec into a dedicated tmux/psmux session.
-			// Build the inner crush command args, passing through the
+			// Build the inner smith command args, passing through the
 			// user's original flags and defaulting to --continue.
 			innerArgs := buildInnerTmuxArgs(cmd)
 			if err := execIntoTmux(innerArgs); err != nil {
@@ -204,7 +204,7 @@ crush --continue
 		if _, err := program.Run(); err != nil {
 			event.Error(err)
 			slog.Error("TUI run error", "error", err)
-			return errors.New("Crush crashed. If metrics are enabled, we were notified about it. If you'd like to report it, please copy the stacktrace above and open an issue at https://github.com/charmbracelet/crush/issues/new?template=bug.yml") //nolint:staticcheck
+			return errors.New("Smith crashed. If metrics are enabled, we were notified about it. If you'd like to report it, please copy the stacktrace above and open an issue at https://github.com/zhiqiang-hhhh/smith/issues/new?template=bug.yml") //nolint:staticcheck
 		}
 		return nil
 	},
@@ -275,9 +275,9 @@ func supportsProgressBar() bool {
 }
 
 // useClientServer returns true when the client/server architecture is
-// enabled via the CRUSH_CLIENT_SERVER environment variable.
+// enabled via the SMITH_CLIENT_SERVER environment variable.
 func useClientServer() bool {
-	v, _ := strconv.ParseBool(os.Getenv("CRUSH_CLIENT_SERVER"))
+	v, _ := strconv.ParseBool(os.Getenv("SMITH_CLIENT_SERVER"))
 	return v
 }
 
@@ -299,7 +299,7 @@ func setupWorkspaceWithProgressBar(cmd *cobra.Command) (workspace.Workspace, fun
 }
 
 // setupWorkspace returns a Workspace and cleanup function. When
-// CRUSH_CLIENT_SERVER=1, it connects to a server process and returns a
+// SMITH_CLIENT_SERVER=1, it connects to a server process and returns a
 // ClientWorkspace. Otherwise it creates an in-process app.App and
 // returns an AppWorkspace.
 func setupWorkspace(cmd *cobra.Command) (workspace.Workspace, func(), error) {
@@ -350,8 +350,8 @@ func setupLocalWorkspace(cmd *cobra.Command) (workspace.Workspace, func(), error
 		return nil, nil, err
 	}
 
-	logFile := filepath.Join(cfg.Options.DataDirectory, "logs", "crush.log")
-	crushlog.Setup(logFile, debug)
+	logFile := filepath.Join(cfg.Options.DataDirectory, "logs", "smith.log")
+	smithlog.Setup(logFile, debug)
 
 	appInstance, err := app.New(ctx, conn, store)
 	if err != nil {
@@ -449,8 +449,8 @@ func connectToServer(cmd *cobra.Command) (*client.Client, *proto.Workspace, func
 	}
 
 	if ws.Config != nil {
-		logFile := filepath.Join(ws.Config.Options.DataDirectory, "logs", "crush.log")
-		crushlog.Setup(logFile, debug)
+		logFile := filepath.Join(ws.Config.Options.DataDirectory, "logs", "smith.log")
+		smithlog.Setup(logFile, debug)
 	}
 
 	cleanup := func() { _ = c.DeleteWorkspace(context.Background(), ws.ID) }
@@ -493,7 +493,7 @@ func ensureServer(cmd *cobra.Command, hostURL *url.URL) error {
 			}
 		}
 		if err != nil {
-			return fmt.Errorf("failed to initialize crush server: %v", err)
+			return fmt.Errorf("failed to initialize smith server: %v", err)
 		}
 	}
 
@@ -575,18 +575,18 @@ func startDetachedServer(cmd *cobra.Command) error {
 	c.Stderr = stderr
 
 	if err := c.Start(); err != nil {
-		return fmt.Errorf("failed to start crush server: %v", err)
+		return fmt.Errorf("failed to start smith server: %v", err)
 	}
 
 	if err := c.Process.Release(); err != nil {
-		return fmt.Errorf("failed to detach crush server process: %v", err)
+		return fmt.Errorf("failed to detach smith server process: %v", err)
 	}
 
 	return nil
 }
 
 func shouldEnableMetrics(cfg *config.Config) bool {
-	if v, _ := strconv.ParseBool(os.Getenv("CRUSH_DISABLE_METRICS")); v {
+	if v, _ := strconv.ParseBool(os.Getenv("SMITH_DISABLE_METRICS")); v {
 		return false
 	}
 	if v, _ := strconv.ParseBool(os.Getenv("DO_NOT_TRACK")); v {
@@ -665,7 +665,7 @@ func ResolveCwd(cmd *cobra.Command) (string, error) {
 	return cwd, nil
 }
 
-func createDotCrushDir(dir string) error {
+func createDotSmithDir(dir string) error {
 	if err := os.MkdirAll(dir, 0o700); err != nil {
 		return fmt.Errorf("failed to create data directory: %q %w", dir, err)
 	}

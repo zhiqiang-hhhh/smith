@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/charmbracelet/crush/internal/config"
+	"github.com/zhiqiang-hhhh/smith/internal/config"
 	"github.com/stretchr/testify/require"
 )
 
@@ -15,12 +15,12 @@ func TestPromptData_LoadsGlobalContextFiles(t *testing.T) {
 
 	globalDir := t.TempDir()
 	workingDir := t.TempDir()
-	t.Setenv("CRUSH_GLOBAL_CONFIG", globalDir)
+	t.Setenv("SMITH_GLOBAL_CONFIG", globalDir)
 
 	os.WriteFile(filepath.Join(globalDir, "AGENTS.md"), []byte("global instructions"), 0o644)
 
 	cfg := &config.Config{Options: &config.Options{
-		DataDirectory: filepath.Join(workingDir, ".crush"),
+		DataDirectory: filepath.Join(workingDir, ".smith"),
 	}}
 	store := config.NewConfigStoreForTesting(cfg, workingDir)
 	p, err := NewPrompt("test", "{{range .ContextFiles}}[{{.Path}}:{{.Content}}]{{end}}")
@@ -43,13 +43,13 @@ func TestPromptData_BothGlobalAndProjectLoaded(t *testing.T) {
 
 	globalDir := t.TempDir()
 	workingDir := t.TempDir()
-	t.Setenv("CRUSH_GLOBAL_CONFIG", globalDir)
+	t.Setenv("SMITH_GLOBAL_CONFIG", globalDir)
 
 	os.WriteFile(filepath.Join(globalDir, "AGENTS.md"), []byte("global instructions"), 0o644)
 	os.WriteFile(filepath.Join(workingDir, "AGENTS.md"), []byte("project instructions"), 0o644)
 
 	cfg := &config.Config{Options: &config.Options{
-		DataDirectory: filepath.Join(workingDir, ".crush"),
+		DataDirectory: filepath.Join(workingDir, ".smith"),
 	}}
 	store := config.NewConfigStoreForTesting(cfg, workingDir)
 	p, err := NewPrompt("test", "{{range .ContextFiles}}[{{.Content}}]{{end}}")
@@ -74,11 +74,11 @@ func TestPromptData_BothGlobalAndProjectLoaded(t *testing.T) {
 
 func TestPromptData_GlobalDirNotExist(t *testing.T) {
 
-	t.Setenv("CRUSH_GLOBAL_CONFIG", "/nonexistent/path/to/config")
+	t.Setenv("SMITH_GLOBAL_CONFIG", "/nonexistent/path/to/config")
 	workingDir := t.TempDir()
 
 	cfg := &config.Config{Options: &config.Options{
-		DataDirectory: filepath.Join(workingDir, ".crush"),
+		DataDirectory: filepath.Join(workingDir, ".smith"),
 	}}
 	store := config.NewConfigStoreForTesting(cfg, workingDir)
 	p, err := NewPrompt("test", "{{range .ContextFiles}}[{{.Content}}]{{end}}")
@@ -92,18 +92,18 @@ func TestPromptData_GlobalDirNotExist(t *testing.T) {
 func TestPromptData_GlobalInContextPathsNoDuplicate(t *testing.T) {
 	globalDir := t.TempDir()
 	workingDir := t.TempDir()
-	t.Setenv("CRUSH_GLOBAL_CONFIG", globalDir)
+	t.Setenv("SMITH_GLOBAL_CONFIG", globalDir)
 
 	os.WriteFile(filepath.Join(globalDir, "AGENTS.md"), []byte("global instructions"), 0o644)
 	os.WriteFile(filepath.Join(workingDir, "AGENTS.md"), []byte("project instructions"), 0o644)
 
 	cfg := &config.Config{Options: &config.Options{
-		DataDirectory: filepath.Join(workingDir, ".crush"),
+		DataDirectory: filepath.Join(workingDir, ".smith"),
 	}}
 	store := config.NewConfigStoreForTesting(cfg, workingDir)
 
 	// Append the absolute global path after setDefaults. This simulates a
-	// user adding "~/.config/crush/AGENTS.md" to context_paths. The global
+	// user adding "~/.config/smith/AGENTS.md" to context_paths. The global
 	// file should appear exactly once (already loaded in the global phase),
 	// not duplicated.
 	cfg.Options.ContextPaths = append(cfg.Options.ContextPaths, filepath.Join(globalDir, "AGENTS.md"))

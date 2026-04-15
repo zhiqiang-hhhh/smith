@@ -9,17 +9,17 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/charmbracelet/crush/internal/config"
+	"github.com/zhiqiang-hhhh/smith/internal/config"
 	"github.com/spf13/cobra"
 )
 
 //go:embed tmux.conf
 var embeddedTmuxConf string
 
-// tmuxSocketPath returns the path to the dedicated crush tmux socket.
+// tmuxSocketPath returns the path to the dedicated smith tmux socket.
 func tmuxSocketPath() string {
 	dir := os.TempDir()
-	return filepath.Join(dir, "tmux-crush")
+	return filepath.Join(dir, "tmux-smith")
 }
 
 // tmuxConfPath returns the path where the embedded tmux config is written.
@@ -51,24 +51,24 @@ func findMux() string {
 	return ""
 }
 
-// shouldAutoTmux returns true if crush should exec into a tmux session.
+// shouldAutoTmux returns true if smith should exec into a tmux session.
 // Conditions: not already in tmux, tmux/psmux available, not disabled.
 func shouldAutoTmux() bool {
 	if os.Getenv("TMUX") != "" {
 		return false
 	}
-	if os.Getenv("CRUSH_NO_TMUX") != "" {
+	if os.Getenv("SMITH_NO_TMUX") != "" {
 		return false
 	}
 	return findMux() != ""
 }
 
-// execIntoTmux replaces the current process with a tmux session running crush.
+// execIntoTmux replaces the current process with a tmux session running smith.
 // On Unix this uses syscall.Exec; on Windows it uses os/exec and waits.
 //
 // Each working directory gets its own tmux session so that running
-// crush in different projects does not reattach to the wrong one.
-func execIntoTmux(crushArgs []string) error {
+// smith in different projects does not reattach to the wrong one.
+func execIntoTmux(smithArgs []string) error {
 	muxBin := findMux()
 	if muxBin == "" {
 		return nil
@@ -89,7 +89,7 @@ func execIntoTmux(crushArgs []string) error {
 		return err
 	}
 
-	// Set dedicated socket path so crush's tmux doesn't interfere with
+	// Set dedicated socket path so smith's tmux doesn't interfere with
 	// the user's regular tmux sessions.
 	socket := tmuxSocketPath()
 
@@ -108,9 +108,9 @@ func execIntoTmux(crushArgs []string) error {
 		"-c", cwd,
 	}
 
-	// Append the crush executable and its original args as the tmux
+	// Append the smith executable and its original args as the tmux
 	// window command.
-	windowCmd := append([]string{exe}, crushArgs...)
+	windowCmd := append([]string{exe}, smithArgs...)
 	args = append(args, windowCmd...)
 
 	return muxExec(muxBin, args)
@@ -125,10 +125,10 @@ func tmuxSessionName(cwd string) string {
 	base = strings.NewReplacer(".", "-", ":", "-").Replace(base)
 	h := sha256.Sum256([]byte(cwd))
 	short := hex.EncodeToString(h[:4])
-	return "crush-" + base + "-" + short
+	return "smith-" + base + "-" + short
 }
 
-// buildInnerTmuxArgs builds the argument list for the crush process that
+// buildInnerTmuxArgs builds the argument list for the smith process that
 // will run inside tmux. It preserves the user's original flags and defaults
 // to --continue if no session flag was given.
 func buildInnerTmuxArgs(cmd *cobra.Command) []string {

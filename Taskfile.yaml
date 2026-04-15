@@ -47,7 +47,7 @@ tasks:
   build:
     desc: Run build
     vars:
-      LDFLAGS: '-ldflags="{{if .VERSION}}-X github.com/charmbracelet/crush/internal/version.Version={{.VERSION}}{{end}} -X github.com/charmbracelet/crush/internal/version.Commit={{.COMMIT}} -X github.com/charmbracelet/crush/internal/version.BuildDate={{.BUILD_DATE}}"'
+      LDFLAGS: '-ldflags="{{if .VERSION}}-X github.com/zhiqiang-hhhh/smith/internal/version.Version={{.VERSION}}{{end}} -X github.com/zhiqiang-hhhh/smith/internal/version.Commit={{.COMMIT}} -X github.com/zhiqiang-hhhh/smith/internal/version.BuildDate={{.BUILD_DATE}}"'
     cmds:
       - "go build -v {{if .RACE}}-race{{end}} {{.LDFLAGS}} ."
     sources:
@@ -57,13 +57,13 @@ tasks:
       - internal/agent/**/*.md.tpl
       - internal/agent/hyper/provider.json
     generates:
-      - crush{{exeExt}}
+      - smith{{exeExt}}
 
   run:
     desc: Run build
     cmds:
       - task: build
-      - "./crush{{exeExt}} {{.CLI_ARGS}} {{if .RACE}}2>race.log{{end}}"
+      - "./smith{{exeExt}} {{.CLI_ARGS}} {{if .RACE}}2>race.log{{end}}"
 
   run:catwalk:
     desc: Run build with local Catwalk
@@ -71,17 +71,17 @@ tasks:
       CATWALK_URL: http://localhost:8080
     cmds:
       - task: build
-      - ./crush{{exeExt}} {{.CLI_ARGS}}
+      - ./smith{{exeExt}} {{.CLI_ARGS}}
 
   run:onboarding:
     desc: Run build with custom config to test onboarding
     env:
-      CRUSH_GLOBAL_DATA: tmp/onboarding/data
-      CRUSH_GLOBAL_CONFIG: tmp/onboarding/config
+      SMITH_GLOBAL_DATA: tmp/onboarding/data
+      SMITH_GLOBAL_CONFIG: tmp/onboarding/config
     cmds:
       - task: build
       - rm -rf tmp/onboarding
-      - ./crush{{exeExt}} {{.CLI_ARGS}}
+      - ./smith{{exeExt}} {{.CLI_ARGS}}
 
   test:
     desc: Run tests
@@ -113,14 +113,14 @@ tasks:
   dev:
     desc: Run with profiling enabled
     env:
-      CRUSH_PROFILE: true
+      SMITH_PROFILE: true
     cmds:
       - go run .
 
   install:
     desc: Install the application
     vars:
-      LDFLAGS: '-ldflags="{{if .VERSION}}-X github.com/charmbracelet/crush/internal/version.Version={{.VERSION}}{{end}} -X github.com/charmbracelet/crush/internal/version.Commit={{.COMMIT}} -X github.com/charmbracelet/crush/internal/version.BuildDate={{.BUILD_DATE}}"'
+      LDFLAGS: '-ldflags="{{if .VERSION}}-X github.com/zhiqiang-hhhh/smith/internal/version.Version={{.VERSION}}{{end}} -X github.com/zhiqiang-hhhh/smith/internal/version.Commit={{.COMMIT}} -X github.com/zhiqiang-hhhh/smith/internal/version.BuildDate={{.BUILD_DATE}}"'
     cmds:
       - task: fetch-tags
       - go install {{.LDFLAGS}} -v .

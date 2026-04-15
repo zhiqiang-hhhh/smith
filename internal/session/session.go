@@ -10,9 +10,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/charmbracelet/crush/internal/db"
-	"github.com/charmbracelet/crush/internal/event"
-	"github.com/charmbracelet/crush/internal/pubsub"
+	"github.com/zhiqiang-hhhh/smith/internal/db"
+	"github.com/zhiqiang-hhhh/smith/internal/event"
+	"github.com/zhiqiang-hhhh/smith/internal/pubsub"
 	"github.com/google/uuid"
 	"github.com/zeebo/xxh3"
 )

@@ -1,7 +1,7 @@
 package agent
 
 import (
-	"github.com/charmbracelet/crush/internal/csync"
+	"github.com/zhiqiang-hhhh/smith/internal/csync"
 )
 
 // maxConsecutiveSummarizeFailures is the number of consecutive auto-summarize

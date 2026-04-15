@@ -11,11 +11,11 @@ import (
 	"charm.land/bubbles/v2/textinput"
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
-	"github.com/charmbracelet/crush/internal/search"
-	"github.com/charmbracelet/crush/internal/session"
-	"github.com/charmbracelet/crush/internal/ui/common"
-	"github.com/charmbracelet/crush/internal/ui/list"
-	"github.com/charmbracelet/crush/internal/ui/util"
+	"github.com/zhiqiang-hhhh/smith/internal/search"
+	"github.com/zhiqiang-hhhh/smith/internal/session"
+	"github.com/zhiqiang-hhhh/smith/internal/ui/common"
+	"github.com/zhiqiang-hhhh/smith/internal/ui/list"
+	"github.com/zhiqiang-hhhh/smith/internal/ui/util"
 	uv "github.com/charmbracelet/ultraviolet"
 )
 
@@ -87,7 +87,7 @@ func NewSessions(com *common.Common, selectedSessionID string) (*Session, error)
 	}
 
 	s.sessions = sessions
-	s.activeIDs = com.Mux.ActiveCrushSessions()
+	s.activeIDs = com.Mux.ActiveSmithSessions()
 	for i, sess := range sessions {
 		if sess.ID == selectedSessionID {
 			s.selectedSessionInx = i
@@ -95,7 +95,7 @@ func NewSessions(com *common.Common, selectedSessionID string) (*Session, error)
 		}
 	}
 
-	s.dbPath = filepath.Join(com.Workspace.Config().Options.DataDirectory, "crush.db")
+	s.dbPath = filepath.Join(com.Workspace.Config().Options.DataDirectory, "smith.db")
 
 	help := help.New()
 	help.Styles = com.Styles.DialogHelpStyles()

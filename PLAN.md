@@ -1,4 +1,4 @@
-# Crush — 补齐 Claude Code 功能计划
+# Smith — 补齐 Claude Code 功能计划
 
 > 对比 `~/claude-code` 源码整理，按优先级分 10 个阶段。
 
@@ -6,7 +6,7 @@
 
 ## 现状对比总览
 
-| 维度 | Crush | Claude Code | 差距 |
+| 维度 | Smith | Claude Code | 差距 |
 |---|---|---|---|
 | 工具数 | ~28 | ~40+ | 中 |
 | 斜杠命令 | ~18 (命令面板) | ~60+ (文本输入) | 大 |
@@ -97,9 +97,9 @@ func LoadRules(configStore *config.ConfigStore) []PermissionRule
 ```
 
 - 从多个 settings JSON 文件加载:
-  - `~/.config/crush/settings.json` (userSettings)
-  - `.crush/settings.json` (projectSettings)
-  - `.crush/settings.local.json` (localSettings)
+  - `~/.config/smith/settings.json` (userSettings)
+  - `.smith/settings.json` (projectSettings)
+  - `.smith/settings.local.json` (localSettings)
 - JSON 格式:
   ```json
   {
@@ -159,7 +159,7 @@ func IsDangerousBashPermission(ruleContent string) bool
 ```go
 var protectedPaths = []string{
     ".git/", ".gitconfig", ".bashrc", ".zshrc", ".profile",
-    ".ssh/", ".gnupg/", ".crush/", ".claude/",
+    ".ssh/", ".gnupg/", ".smith/", ".claude/",
 }
 
 func IsProtectedPath(path string) bool
@@ -296,7 +296,7 @@ func ExecuteHooks(ctx context.Context, snapshot *Snapshot, input HookInput) ([]H
 - **Command hook 执行**:
   1. 序列化 `HookInput` 为 JSON
   2. 通过 stdin 管道传给 shell 命令
-  3. 设置环境变量: `CRUSH_SESSION_ID`, `CRUSH_PROJECT_ROOT`, `CRUSH_CWD`
+  3. 设置环境变量: `SMITH_SESSION_ID`, `SMITH_PROJECT_ROOT`, `SMITH_CWD`
   4. 解析 stdout 为 `HookResult` JSON
   5. Exit code 语义: 0=成功, 2=阻止 (stderr 作为原因), 其他=非阻止错误
   6. 超时通过 `context.WithTimeout` 控制
@@ -368,10 +368,10 @@ func DiscoverContextFiles(cwd string) ([]ContextFile, error)
    - `<dir>/.claude/rules/*.md` (递归子目录)
    - `<dir>/CLAUDE.local.md`
 4. 全局层 (最低优先级):
-   - `~/.crush/CLAUDE.md`
-   - `~/.crush/rules/*.md`
-   - `~/.config/crush/CLAUDE.md`
-5. 保留现有兼容名: `AGENTS.md`, `crush.md`, `CRUSH.md` 等
+   - `~/.smith/CLAUDE.md`
+   - `~/.smith/rules/*.md`
+   - `~/.config/smith/CLAUDE.md`
+5. 保留现有兼容名: `AGENTS.md`, `smith.md`, `SMITH.md` 等
 6. 去重 (按小写 basename)
 
 ### 3.2 @include 指令
@@ -447,12 +447,12 @@ const (
     MaxEntrypointBytes = 25 * 1024
 )
 
-func MemoryDir(cwd string) string // ~/.crush/projects/<slug>/memory/
+func MemoryDir(cwd string) string // ~/.smith/projects/<slug>/memory/
 func EnsureDir(dir string) error
 func TruncateEntrypoint(content string) string
 ```
 
-- 路径: `~/.crush/projects/<sanitized-git-root>/memory/`
+- 路径: `~/.smith/projects/<sanitized-git-root>/memory/`
 - git worktree 共享同一 memory 目录 (通过 `findCanonicalGitRoot`)
 - `MEMORY.md` 格式: 每行 `- [Title](file.md) — 一行描述`
 
@@ -609,7 +609,7 @@ type CommandEnv struct {
 | `commit.go` | `/commit` | | 分析 staged, 生成 message, `git commit` |
 | `pr.go` | `/pr` | | commit + push + `gh pr create` |
 | `security_review.go` | `/security-review` | | 安全审查 (`git diff` → 漏洞扫描) |
-| `config.go` | `/config` | `/settings` | 打开外部编辑器编辑 crush.json |
+| `config.go` | `/config` | `/settings` | 打开外部编辑器编辑 smith.json |
 | `doctor.go` | `/doctor` | | 诊断: git/rg/LSP/MCP/provider 连通性 |
 | `cost.go` | `/cost` | | 本次会话 token 消耗和费用 |
 | `status.go` | `/status` | | 版本/模型/账户/API 状态 |
@@ -898,7 +898,7 @@ type PluginManifest struct {
 func LoadPlugin(dir string) (*Plugin, error)
 ```
 
-1. 读取 `.crush-plugin/plugin.json` 或 `plugin.json`
+1. 读取 `.smith-plugin/plugin.json` 或 `plugin.json`
 2. 自动发现子目录: `commands/`, `agents/`, `skills/`, `hooks/`
 3. 加载 hooks (从 `hooks/hooks.json` 或 manifest)
 4. 验证 manifest
@@ -921,8 +921,8 @@ func (m *Manager) MCPServers() map[string]any
 
 ### 8.2 Plugin 目录
 
-- 用户: `~/.crush/plugins/`
-- 项目: `.crush/plugins/`
+- 用户: `~/.smith/plugins/`
+- 项目: `.smith/plugins/`
 
 ### 8.3 集成
 
@@ -946,7 +946,7 @@ func (m *Manager) MCPServers() map[string]any
 - [ ] git 可用 + 版本
 - [ ] ripgrep (rg) 可用
 - [ ] 环境变量 (API keys 是否设置)
-- [ ] crush.json 语法有效性
+- [ ] smith.json 语法有效性
 - [ ] 每个配置的 LSP server 是否可启动
 - [ ] 每个配置的 MCP server 是否可连接
 - [ ] 每个配置的 provider 是否可 ping
@@ -1016,22 +1016,22 @@ func RestoreCheckpoint(cp *Checkpoint) error
 - WebSocket 服务器/客户端
 - 序列化/反序列化消息流
 - JWT 认证
-- `crush remote` 子命令
+- `smith remote` 子命令
 
 ### 10.3 IDE 集成
-- 作为 MCP server 运行 (`crush mcp-server`)
+- 作为 MCP server 运行 (`smith mcp-server`)
 - VS Code / JetBrains 通过 MCP SSE-IDE transport 连接
 - 暴露所有内置工具
 
 ### 10.4 Daemon/后台会话
-- `crush daemon` — 后台长驻进程
-- `crush ps` — 列出活跃会话
-- `crush attach <id>` — 连接到后台会话
-- `crush kill <id>` — 终止会话
+- `smith daemon` — 后台长驻进程
+- `smith ps` — 列出活跃会话
+- `smith attach <id>` — 连接到后台会话
+- `smith kill <id>` — 终止会话
 - `--bg` 标志 — 启动即后台
 
 ### 10.5 Auto-updater
-- `crush update` — 检查+下载+替换自身
+- `smith update` — 检查+下载+替换自身
 - 通道: stable / latest
 - GitHub Release API
 
@@ -1088,4 +1088,4 @@ func RestoreCheckpoint(cp *Checkpoint) error
 1. `task lint`
 2. `task test`
 3. `task build`
-4. 手动启动 `crush` 测试新功能
+4. 手动启动 `smith` 测试新功能

@@ -11,8 +11,8 @@ import (
 
 	"charm.land/fantasy"
 
-	"github.com/charmbracelet/crush/internal/agent/prompt"
-	"github.com/charmbracelet/crush/internal/agent/tools"
+	"github.com/zhiqiang-hhhh/smith/internal/agent/prompt"
+	"github.com/zhiqiang-hhhh/smith/internal/agent/tools"
 )
 
 //go:embed templates/agentic_fetch.md
@@ -66,7 +66,7 @@ func (c *coordinator) agenticFetchTool(_ context.Context, client *http.Client) (
 				return fantasy.NewTextErrorResponse(err.Error()), nil
 			}
 
-			tmpDir, err := os.MkdirTemp(c.cfg.Config().Options.DataDirectory, "crush-fetch-*")
+			tmpDir, err := os.MkdirTemp(c.cfg.Config().Options.DataDirectory, "smith-fetch-*")
 			if err != nil {
 				return fantasy.NewTextErrorResponse(fmt.Sprintf("Failed to create temporary directory: %s", err)), nil
 			}

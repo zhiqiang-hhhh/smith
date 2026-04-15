@@ -12,8 +12,8 @@ import (
 )
 
 const (
-	githubApiUrl = "https://api.github.com/repos/amosbird/crush/releases/latest"
-	userAgent    = "crush/1.0"
+	githubApiUrl = "https://api.github.com/repos/zhiqiang-hhhh/smith/releases/latest"
+	userAgent    = "smith/1.0"
 )
 
 // Default is the default [Client].

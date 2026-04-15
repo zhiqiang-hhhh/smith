@@ -13,10 +13,10 @@ import (
 	"net/url"
 	"time"
 
-	"github.com/charmbracelet/crush/internal/config"
-	"github.com/charmbracelet/crush/internal/message"
-	"github.com/charmbracelet/crush/internal/proto"
-	"github.com/charmbracelet/crush/internal/pubsub"
+	"github.com/zhiqiang-hhhh/smith/internal/config"
+	"github.com/zhiqiang-hhhh/smith/internal/message"
+	"github.com/zhiqiang-hhhh/smith/internal/proto"
+	"github.com/zhiqiang-hhhh/smith/internal/pubsub"
 	"github.com/charmbracelet/x/powernap/pkg/lsp/protocol"
 )
 
