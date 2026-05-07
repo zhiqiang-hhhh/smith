@@ -12,6 +12,7 @@ import (
 	"charm.land/glamour/v2"
 	"charm.land/lipgloss/v2"
 	"charm.land/lipgloss/v2/tree"
+	"github.com/charmbracelet/x/ansi"
 	"github.com/zhiqiang-hhhh/smith/internal/agent"
 	"github.com/zhiqiang-hhhh/smith/internal/agent/tools"
 	"github.com/zhiqiang-hhhh/smith/internal/diff"
@@ -21,7 +22,6 @@ import (
 	"github.com/zhiqiang-hhhh/smith/internal/ui/anim"
 	"github.com/zhiqiang-hhhh/smith/internal/ui/common"
 	"github.com/zhiqiang-hhhh/smith/internal/ui/styles"
-	"github.com/charmbracelet/x/ansi"
 )
 
 // responseContextHeight limits the number of lines displayed in tool output.
@@ -274,6 +274,8 @@ func NewToolMessageItem(
 		item = NewReferencesToolMessageItem(sty, toolCall, result, canceled)
 	case tools.LSPRestartToolName:
 		item = NewLSPRestartToolMessageItem(sty, toolCall, result, canceled)
+	case tools.RenderDiagramToolName:
+		item = NewRenderDiagramToolMessageItem(sty, toolCall, result, canceled)
 	default:
 		if IsDockerMCPTool(toolCall.Name) {
 			item = NewDockerMCPToolMessageItem(sty, toolCall, result, canceled)
@@ -1501,6 +1503,8 @@ func prettifyToolName(name string) string {
 		return "View"
 	case tools.WriteToolName:
 		return "Write"
+	case tools.RenderDiagramToolName:
+		return "Render Diagram"
 	default:
 		return genericPrettyName(name)
 	}

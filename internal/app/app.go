@@ -19,6 +19,8 @@ import (
 	"charm.land/catwalk/pkg/catwalk"
 	"charm.land/fantasy"
 	"charm.land/lipgloss/v2"
+	"github.com/charmbracelet/x/ansi"
+	"github.com/charmbracelet/x/term"
 	"github.com/zhiqiang-hhhh/smith/internal/agent"
 	"github.com/zhiqiang-hhhh/smith/internal/agent/notify"
 	"github.com/zhiqiang-hhhh/smith/internal/agent/tools/mcp"
@@ -33,14 +35,13 @@ import (
 	"github.com/zhiqiang-hhhh/smith/internal/message"
 	"github.com/zhiqiang-hhhh/smith/internal/permission"
 	"github.com/zhiqiang-hhhh/smith/internal/pubsub"
+	"github.com/zhiqiang-hhhh/smith/internal/render"
 	"github.com/zhiqiang-hhhh/smith/internal/session"
 	"github.com/zhiqiang-hhhh/smith/internal/shell"
 	"github.com/zhiqiang-hhhh/smith/internal/ui/anim"
 	"github.com/zhiqiang-hhhh/smith/internal/ui/styles"
 	"github.com/zhiqiang-hhhh/smith/internal/update"
 	"github.com/zhiqiang-hhhh/smith/internal/version"
-	"github.com/charmbracelet/x/ansi"
-	"github.com/charmbracelet/x/term"
 )
 
 // UpdateAvailableMsg is sent when a new version is available.
@@ -58,6 +59,7 @@ type App struct {
 	FileTracker filetracker.Service
 
 	AgentCoordinator agent.Coordinator
+	RenderServer     *render.Server
 
 	LSPManager *lsp.Manager
 
@@ -89,13 +91,19 @@ func New(ctx context.Context, conn *sql.DB, store *config.ConfigStore) (*App, er
 		allowedTools = cfg.Permissions.AllowedTools
 	}
 
+	renderServer, err := render.NewServer()
+	if err != nil {
+		return nil, fmt.Errorf("failed to initialize render server: %w", err)
+	}
+
 	app := &App{
-		Sessions:    sessions,
-		Messages:    messages,
-		History:     files,
-		Permissions: permission.NewPermissionService(store.WorkingDir(), skipPermissionsRequests, allowedTools, autoApproveWorkingDir),
-		FileTracker: filetracker.NewService(q),
-		LSPManager:  lsp.NewManager(store),
+		Sessions:     sessions,
+		Messages:     messages,
+		History:      files,
+		Permissions:  permission.NewPermissionService(store.WorkingDir(), skipPermissionsRequests, allowedTools, autoApproveWorkingDir),
+		FileTracker:  filetracker.NewService(q),
+		RenderServer: renderServer,
+		LSPManager:   lsp.NewManager(store),
 
 		globalCtx: ctx,
 
@@ -121,6 +129,7 @@ func New(ctx context.Context, conn *sql.DB, store *config.ConfigStore) (*App, er
 		app.cleanupFuncs,
 		func(context.Context) error { return conn.Close() },
 		func(ctx context.Context) error { return mcp.Close(ctx) },
+		func(ctx context.Context) error { return renderServer.Shutdown(ctx) },
 	)
 
 	// TODO: remove the concept of agent config, most likely.
@@ -558,6 +567,7 @@ func (app *App) InitCoderAgent(ctx context.Context) error {
 		app.FileTracker,
 		app.LSPManager,
 		app.agentNotifications,
+		app.RenderServer,
 	)
 	if err != nil {
 		slog.Error("Failed to create coder agent", "err", err)

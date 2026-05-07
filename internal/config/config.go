@@ -14,11 +14,11 @@ import (
 	"time"
 
 	"charm.land/catwalk/pkg/catwalk"
+	"github.com/invopop/jsonschema"
 	"github.com/zhiqiang-hhhh/smith/internal/csync"
 	"github.com/zhiqiang-hhhh/smith/internal/env"
 	"github.com/zhiqiang-hhhh/smith/internal/oauth"
 	"github.com/zhiqiang-hhhh/smith/internal/oauth/copilot"
-	"github.com/invopop/jsonschema"
 )
 
 const (
@@ -495,7 +495,7 @@ func resolveWorkerTools(tools []string) []string {
 		"bash", "diff", "edit", "multiedit", "fetch", "agentic_fetch", "glob", "grep",
 		"job_output", "job_kill", "ls",
 		"sourcegraph", "view", "write",
-		"web_search", "download",
+		"web_search", "download", "render_diagram",
 	}
 	return filterSlice(tools, workerTools, true)
 }
@@ -526,6 +526,7 @@ func allToolNames() []string {
 		"list_mcp_resources",
 		"read_mcp_resource",
 		"memory_search",
+		"render_diagram",
 	}
 }
 
@@ -548,7 +549,7 @@ func resolvePlannerTools(tools []string) []string {
 		"agent", "diff", "fetch", "agentic_fetch", "glob", "grep",
 		"ls",
 		"list_mcp_resources", "read_mcp_resource", "memory_search",
-		"sourcegraph", "todos", "view", "web_search",
+		"sourcegraph", "todos", "view", "web_search", "render_diagram",
 	}
 	return filterSlice(tools, plannerTools, true)
 }

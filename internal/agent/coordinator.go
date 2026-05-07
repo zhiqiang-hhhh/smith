@@ -33,6 +33,7 @@ import (
 	"github.com/zhiqiang-hhhh/smith/internal/oauth/copilot"
 	"github.com/zhiqiang-hhhh/smith/internal/permission"
 	"github.com/zhiqiang-hhhh/smith/internal/pubsub"
+	"github.com/zhiqiang-hhhh/smith/internal/render"
 	"github.com/zhiqiang-hhhh/smith/internal/session"
 	"github.com/zhiqiang-hhhh/smith/internal/skills"
 	"golang.org/x/sync/errgroup"
@@ -80,14 +81,15 @@ type Coordinator interface {
 }
 
 type coordinator struct {
-	cfg         *config.ConfigStore
-	sessions    session.Service
-	messages    message.Service
-	permissions permission.Service
-	history     history.Service
-	filetracker filetracker.Service
-	lspManager  *lsp.Manager
-	notify      pubsub.Publisher[notify.Notification]
+	cfg          *config.ConfigStore
+	sessions     session.Service
+	messages     message.Service
+	permissions  permission.Service
+	history      history.Service
+	filetracker  filetracker.Service
+	lspManager   *lsp.Manager
+	notify       pubsub.Publisher[notify.Notification]
+	renderServer *render.Server
 
 	agentMu       sync.RWMutex
 	currentAgent  SessionAgent
@@ -112,6 +114,7 @@ func NewCoordinator(
 	filetracker filetracker.Service,
 	lspManager *lsp.Manager,
 	notify pubsub.Publisher[notify.Notification],
+	renderServer *render.Server,
 ) (Coordinator, error) {
 	// Discover skills once at session start.
 	allSkills, activeSkills := discoverSkills(cfg)
@@ -126,6 +129,7 @@ func NewCoordinator(
 		filetracker:  filetracker,
 		lspManager:   lspManager,
 		notify:       notify,
+		renderServer: renderServer,
 		agents:       make(map[string]SessionAgent),
 		allSkills:    allSkills,
 		activeSkills: activeSkills,
@@ -483,6 +487,7 @@ func (c *coordinator) buildAgent(ctx context.Context, prompt *prompt.Prompt, age
 		Messages:               c.messages,
 		Tools:                  nil,
 		Notify:                 c.notify,
+		RenderServer:           c.renderServer,
 		OnPrepareStep: func(ctx context.Context) error {
 			return c.refreshTokenForProvider(ctx, large.ModelCfg.Provider)
 		},
@@ -577,6 +582,7 @@ func (c *coordinator) buildTools(ctx context.Context, agent config.Agent) ([]fan
 		tools.NewViewTool(c.lspManager, c.permissions, c.filetracker, c.skillTracker, c.cfg.WorkingDir(), c.cfg.Config().Options.SkillsPaths...),
 		tools.NewWebSearchTool(nil),
 		tools.NewWriteTool(c.lspManager, c.permissions, c.history, c.filetracker, c.cfg.WorkingDir()),
+		tools.NewRenderDiagramTool(c.renderServer),
 	)
 
 	// Add LSP tools if user has configured LSPs or auto_lsp is enabled (nil or true).

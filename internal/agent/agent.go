@@ -44,6 +44,7 @@ import (
 	"github.com/zhiqiang-hhhh/smith/internal/message"
 	"github.com/zhiqiang-hhhh/smith/internal/permission"
 	"github.com/zhiqiang-hhhh/smith/internal/pubsub"
+	"github.com/zhiqiang-hhhh/smith/internal/render"
 	"github.com/zhiqiang-hhhh/smith/internal/session"
 	"github.com/zhiqiang-hhhh/smith/internal/stringext"
 	"github.com/zhiqiang-hhhh/smith/internal/trace"
@@ -167,6 +168,7 @@ type sessionAgent struct {
 	needsCodexInstructions *csync.Value[bool]
 	dataDir                string
 	notify                 pubsub.Publisher[notify.Notification]
+	renderServer           *render.Server
 	onPrepareStep          func(ctx context.Context) error
 
 	messageQueue   *csync.Map[string, []SessionAgentCall]
@@ -193,6 +195,7 @@ type SessionAgentOptions struct {
 	Messages               message.Service
 	Tools                  []fantasy.AgentTool
 	Notify                 pubsub.Publisher[notify.Notification]
+	RenderServer           *render.Server
 
 	// OnPrepareStep is called at the beginning of each agent step,
 	// before sending a request to the LLM. It can be used to refresh
@@ -222,6 +225,7 @@ func NewSessionAgent(
 		needsCodexInstructions: csync.NewValue(opts.NeedsCodexInstructions),
 		dataDir:                opts.DataDir,
 		notify:                 opts.Notify,
+		renderServer:           opts.RenderServer,
 		onPrepareStep:          opts.OnPrepareStep,
 		messageQueue:           csync.NewMap[string, []SessionAgentCall](),
 		activeRequests:         csync.NewMap[string, context.CancelFunc](),
@@ -880,6 +884,11 @@ func (a *sessionAgent) Run(ctx context.Context, call SessionAgentCall) (*fantasy
 		return result, err
 	}
 
+	// Auto-render any mermaid code blocks found in the assistant response.
+	if a.renderServer != nil && !call.NonInteractive {
+		a.autoRenderMermaidBlocks(ctx, call.SessionID, currentAssistant)
+	}
+
 	trace.Emit("agent", "run_end", call.SessionID, nil)
 
 	return result, err
@@ -906,6 +915,57 @@ func (a *sessionAgent) drainQueue(ctx context.Context, sessionID string) (*fanta
 		})
 	}
 	return a.Run(ctx, next)
+}
+
+// mermaidBlockRegex matches fenced mermaid code blocks in assistant text.
+var mermaidBlockRegex = regexp.MustCompile("(?s)```mermaid\\s*\\n(.*?)\\n```")
+
+// autoRenderMermaidBlocks scans assistant output for mermaid code blocks
+// and renders each one via the render server. It appends a short note
+// with the URL to the assistant message so the user sees it in the TUI.
+func (a *sessionAgent) autoRenderMermaidBlocks(ctx context.Context, sessionID string, msg *message.Message) {
+	text := msg.Content().Text
+	matches := mermaidBlockRegex.FindAllStringSubmatch(text, -1)
+	if len(matches) == 0 {
+		return
+	}
+
+	// Skip if the assistant already used the render_diagram tool.
+	for _, tc := range msg.ToolCalls() {
+		if tc.Name == tools.RenderDiagramToolName {
+			return
+		}
+	}
+
+	var urls []string
+	for i, m := range matches {
+		title := fmt.Sprintf("Auto-rendered diagram %d", i+1)
+		if len(matches) == 1 {
+			title = "Auto-rendered diagram"
+		}
+		res, err := a.renderServer.Render(sessionID, "mermaid", title, m[1], time.Hour)
+		if err != nil {
+			slog.Warn("Failed to auto-render mermaid block",
+				"session_id", sessionID,
+				"error", err,
+			)
+			continue
+		}
+		urls = append(urls, res.URL)
+	}
+
+	if len(urls) == 0 {
+		return
+	}
+
+	note := "\n\n---\nDiagram rendered: " + strings.Join(urls, " | ")
+	msg.Parts = append(msg.Parts, message.TextContent{Text: note})
+	if err := a.messages.Update(ctx, *msg); err != nil {
+		slog.Warn("Failed to update message with auto-render URLs",
+			"session_id", sessionID,
+			"error", err,
+		)
+	}
 }
 
 func (a *sessionAgent) Summarize(ctx context.Context, sessionID string, opts fantasy.ProviderOptions) error {
