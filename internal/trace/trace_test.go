@@ -10,7 +10,7 @@ import (
 )
 
 func TestStartStopRoundTrip(t *testing.T) {
-	Start()
+	Start("test-session")
 	assert.True(t, IsActive())
 
 	Emit("agent", "run_start", "sess-1", map[string]any{"model": "test"})
@@ -48,10 +48,10 @@ func TestEmitWhenInactive(t *testing.T) {
 }
 
 func TestDoubleStart(t *testing.T) {
-	Start()
+	Start("test-session")
 	Emit("agent", "first", "", nil)
 
-	Start()
+	Start("test-session")
 	Emit("agent", "second", "", nil)
 
 	result := Stop()

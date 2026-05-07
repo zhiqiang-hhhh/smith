@@ -826,8 +826,52 @@ func TestRepairOrphanedToolResults(t *testing.T) {
 		result := repairOrphanedToolResults(history)
 		assert.Equal(t, len(history), len(result))
 	})
-}
 
+	t.Run("displaced tool result from interrupted session", func(t *testing.T) {
+		t.Parallel()
+		// Reproduces the real bug: user sends "continue" while bash is
+		// running. The tool_result for tc1 arrives after new assistant/tool
+		// messages, making it displaced (not adjacent to its tool_use).
+		history := []fantasy.Message{
+			{Role: fantasy.MessageRoleAssistant, Content: []fantasy.MessagePart{
+				fantasy.ToolCallPart{ToolCallID: "tc1", ToolName: "bash", Input: "{}"},
+			}},
+			// User interrupted, new assistant starts.
+			{Role: fantasy.MessageRoleUser, Content: []fantasy.MessagePart{fantasy.TextPart{Text: "continue"}}},
+			{Role: fantasy.MessageRoleAssistant, Content: []fantasy.MessagePart{
+				fantasy.ToolCallPart{ToolCallID: "tc2", ToolName: "todos", Input: "{}"},
+			}},
+			{Role: fantasy.MessageRoleTool, Content: []fantasy.MessagePart{
+				fantasy.ToolResultPart{ToolCallID: "tc2", Output: fantasy.ToolResultOutputContentText{Text: "ok"}},
+			}},
+			{Role: fantasy.MessageRoleAssistant, Content: []fantasy.MessagePart{
+				fantasy.ToolCallPart{ToolCallID: "tc3", ToolName: "bash", Input: "{}"},
+			}},
+			// Delayed tc1 result arrives here — displaced from its tool_use.
+			{Role: fantasy.MessageRoleTool, Content: []fantasy.MessagePart{
+				fantasy.ToolResultPart{ToolCallID: "tc1", Output: fantasy.ToolResultOutputContentText{Text: "delayed"}},
+			}},
+			{Role: fantasy.MessageRoleTool, Content: []fantasy.MessagePart{
+				fantasy.ToolResultPart{ToolCallID: "tc3", Output: fantasy.ToolResultOutputContentText{Text: "done"}},
+			}},
+		}
+		result := repairOrphanedToolResults(history)
+		// tc1's displaced result should be removed; tc2 and tc3 results kept.
+		require.Equal(t, 6, len(result))
+		for _, msg := range result {
+			if msg.Role != fantasy.MessageRoleTool {
+				continue
+			}
+			for _, part := range msg.Content {
+				tr, ok := fantasy.AsContentType[fantasy.ToolResultPart](part)
+				if !ok {
+					continue
+				}
+				assert.NotEqual(t, "tc1", tr.ToolCallID, "displaced tc1 result should have been removed")
+			}
+		}
+	})
+}
 func BenchmarkBuildSummaryPrompt(b *testing.B) {
 	cases := []struct {
 		name     string

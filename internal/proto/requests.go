@@ -90,3 +90,23 @@ type MCPGetPromptRequest struct {
 type MCPGetPromptResponse struct {
 	Prompt string `json:"prompt"`
 }
+
+// TraceSaveRequest represents a request to save a trace.
+type TraceSaveRequest struct {
+	SessionID  string `json:"session_id"`
+	StartedAt  int64  `json:"started_at"`
+	StoppedAt  int64  `json:"stopped_at"`
+	EventCount int    `json:"event_count"`
+	DataJSONL  string `json:"data_jsonl"`
+}
+
+// TraceRecord represents a trace record in the proto layer.
+type TraceRecord struct {
+	ID         string `json:"id"`
+	SessionID  string `json:"session_id"`
+	StartedAt  int64  `json:"started_at"`
+	StoppedAt  int64  `json:"stopped_at"`
+	EventCount int64  `json:"event_count"`
+	DataJSONL  string `json:"data_jsonl"`
+	CreatedAt  int64  `json:"created_at"`
+}

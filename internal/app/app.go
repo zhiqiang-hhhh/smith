@@ -38,6 +38,7 @@ import (
 	"github.com/zhiqiang-hhhh/smith/internal/render"
 	"github.com/zhiqiang-hhhh/smith/internal/session"
 	"github.com/zhiqiang-hhhh/smith/internal/shell"
+	"github.com/zhiqiang-hhhh/smith/internal/trace"
 	"github.com/zhiqiang-hhhh/smith/internal/ui/anim"
 	"github.com/zhiqiang-hhhh/smith/internal/ui/styles"
 	"github.com/zhiqiang-hhhh/smith/internal/update"
@@ -57,6 +58,7 @@ type App struct {
 	History     history.Service
 	Permissions permission.Service
 	FileTracker filetracker.Service
+	Traces      trace.Service
 
 	AgentCoordinator agent.Coordinator
 	RenderServer     *render.Server
@@ -103,6 +105,7 @@ func New(ctx context.Context, conn *sql.DB, store *config.ConfigStore) (*App, er
 		Permissions:  permission.NewPermissionService(store.WorkingDir(), skipPermissionsRequests, allowedTools, autoApproveWorkingDir),
 		FileTracker:  filetracker.NewService(q),
 		RenderServer: renderServer,
+		Traces:      trace.NewService(q),
 		LSPManager:   lsp.NewManager(store),
 
 		globalCtx: ctx,
@@ -568,6 +571,7 @@ func (app *App) InitCoderAgent(ctx context.Context) error {
 		app.LSPManager,
 		app.agentNotifications,
 		app.RenderServer,
+		app.Traces,
 	)
 	if err != nil {
 		slog.Error("Failed to create coder agent", "err", err)

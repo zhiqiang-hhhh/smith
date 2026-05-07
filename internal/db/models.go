@@ -51,3 +51,13 @@ type Session struct {
 	SummaryMessageID sql.NullString `json:"summary_message_id"`
 	Todos            sql.NullString `json:"todos"`
 }
+
+type Trace struct {
+	ID         string `json:"id"`
+	SessionID  string `json:"session_id"`
+	StartedAt  int64  `json:"started_at"`
+	StoppedAt  int64  `json:"stopped_at"`
+	EventCount int64  `json:"event_count"`
+	DataJsonl  string `json:"data_jsonl"`
+	CreatedAt  int64  `json:"created_at"`
+}

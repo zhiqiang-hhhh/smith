@@ -22,6 +22,7 @@ import (
 	"github.com/zhiqiang-hhhh/smith/internal/proto"
 	"github.com/zhiqiang-hhhh/smith/internal/pubsub"
 	"github.com/zhiqiang-hhhh/smith/internal/session"
+	"github.com/zhiqiang-hhhh/smith/internal/trace"
 	"github.com/charmbracelet/x/powernap/pkg/lsp/protocol"
 )
 
@@ -338,6 +339,43 @@ func (w *ClientWorkspace) ListSessionHistory(ctx context.Context, sessionID stri
 		return nil, err
 	}
 	return protoToFiles(files), nil
+}
+
+// -- Traces --
+
+func (w *ClientWorkspace) TraceSave(ctx context.Context, sessionID string, snapshot trace.Snapshot) (trace.Record, error) {
+	req := proto.TraceSaveRequest{
+		SessionID:  sessionID,
+		StartedAt:  snapshot.StartedAt,
+		StoppedAt:  snapshot.StoppedAt,
+		EventCount: snapshot.EventCount,
+		DataJSONL:  snapshot.DataJSONL,
+	}
+	rec, err := w.client.TraceSave(ctx, w.workspaceID(), req)
+	if err != nil {
+		return trace.Record{}, err
+	}
+	return protoToTraceRecord(*rec), nil
+}
+
+func (w *ClientWorkspace) TraceGet(ctx context.Context, traceID string) (trace.Record, error) {
+	rec, err := w.client.TraceGet(ctx, w.workspaceID(), traceID)
+	if err != nil {
+		return trace.Record{}, err
+	}
+	return protoToTraceRecord(*rec), nil
+}
+
+func protoToTraceRecord(r proto.TraceRecord) trace.Record {
+	return trace.Record{
+		ID:         r.ID,
+		SessionID:  r.SessionID,
+		StartedAt:  r.StartedAt,
+		StoppedAt:  r.StoppedAt,
+		EventCount: r.EventCount,
+		DataJSONL:  r.DataJSONL,
+		CreatedAt:  r.CreatedAt,
+	}
 }
 
 // -- LSP --

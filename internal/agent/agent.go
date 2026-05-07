@@ -432,6 +432,9 @@ func (a *sessionAgent) Run(ctx context.Context, call SessionAgentCall) (*fantasy
 				}
 			}
 
+			// Always use the latest model so refreshed API keys take effect.
+			prepared.Model = a.largeModel.Get().Model
+
 			trace.Emit("agent", "prepare_step", call.SessionID, map[string]any{
 				"message_count": len(options.Messages),
 			})
@@ -1360,32 +1363,40 @@ func removeFromSlice(s []string, val string) []string {
 }
 
 // repairOrphanedToolResults removes tool_result blocks whose tool_use_id has
-// no matching tool_use in a preceding assistant message. This can happen when
-// auto-summarization discards the assistant message containing the tool_use
-// while keeping the subsequent tool_result.
+// no matching tool_use in the immediately preceding assistant message. The
+// Anthropic API requires that each tool_result references a tool_use from
+// the assistant message directly before it — a global existence check is not
+// sufficient. Displaced tool_results can occur when the user sends a new
+// message while a long-running tool (e.g. bash) is still executing: the
+// tool_result arrives later and is persisted out of order.
 func repairOrphanedToolResults(history []fantasy.Message) []fantasy.Message {
-	toolUseIDs := make(map[string]struct{})
+	// Build a set of tool_use IDs from the most recent assistant message
+	// seen so far, updating as we walk forward. Tool messages that follow
+	// an assistant message may only reference IDs from that assistant.
+	var repaired []fantasy.Message
+	var lastAssistantToolIDs map[string]struct{}
+
 	for _, msg := range history {
-		if msg.Role != fantasy.MessageRoleAssistant {
+		if msg.Role == fantasy.MessageRoleAssistant {
+			lastAssistantToolIDs = make(map[string]struct{})
+			for _, part := range msg.Content {
+				if tc, ok := fantasy.AsContentType[fantasy.ToolCallPart](part); ok {
+					lastAssistantToolIDs[tc.ToolCallID] = struct{}{}
+				}
+			}
+			repaired = append(repaired, msg)
 			continue
 		}
-		for _, part := range msg.Content {
-			if tc, ok := fantasy.AsContentType[fantasy.ToolCallPart](part); ok {
-				toolUseIDs[tc.ToolCallID] = struct{}{}
-			}
-		}
-	}
 
-	var repaired []fantasy.Message
-	for _, msg := range history {
 		if msg.Role != fantasy.MessageRoleTool {
 			repaired = append(repaired, msg)
 			continue
 		}
+
 		var kept []fantasy.MessagePart
 		for _, part := range msg.Content {
 			if tr, ok := fantasy.AsContentType[fantasy.ToolResultPart](part); ok {
-				if _, found := toolUseIDs[tr.ToolCallID]; !found {
+				if _, found := lastAssistantToolIDs[tr.ToolCallID]; !found {
 					trace.Emit("agent", "orphaned_tool_result_removed", "", map[string]any{
 						"tool_call_id": tr.ToolCallID,
 					})

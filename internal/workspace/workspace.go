@@ -17,6 +17,7 @@ import (
 	"github.com/zhiqiang-hhhh/smith/internal/message"
 	"github.com/zhiqiang-hhhh/smith/internal/oauth"
 	"github.com/zhiqiang-hhhh/smith/internal/permission"
+	"github.com/zhiqiang-hhhh/smith/internal/trace"
 	"github.com/zhiqiang-hhhh/smith/internal/session"
 )
 
@@ -103,6 +104,10 @@ type Workspace interface {
 
 	// History
 	ListSessionHistory(ctx context.Context, sessionID string) ([]history.File, error)
+
+	// Traces
+	TraceSave(ctx context.Context, sessionID string, snapshot trace.Snapshot) (trace.Record, error)
+	TraceGet(ctx context.Context, traceID string) (trace.Record, error)
 
 	// LSP
 	LSPStart(ctx context.Context, path string)

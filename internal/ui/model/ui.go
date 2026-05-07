@@ -1563,7 +1563,7 @@ func (m *UI) handleDialogMsg(msg tea.Msg) tea.Cmd {
 		if trace.IsActive() {
 			cmds = append(cmds, m.stopTraceAndAnalyze())
 		} else {
-			trace.Start()
+			trace.Start(m.sessionID())
 			cmds = append(cmds, util.ReportInfo("Trace started — use /trace again to stop and analyze"))
 		}
 		m.dialog.CloseDialog(dialog.CommandsID)
@@ -2092,7 +2092,7 @@ func (m *UI) handleKeyPressMsg(msg tea.KeyPressMsg) tea.Cmd {
 					if trace.IsActive() {
 						cmds = append(cmds, m.stopTraceAndAnalyze())
 					} else {
-						trace.Start()
+						trace.Start(m.sessionID())
 						cmds = append(cmds, util.ReportInfo("Trace started — use /trace again to stop and analyze"))
 					}
 					return nil
@@ -3476,16 +3476,24 @@ func (m *UI) cacheSidebarLogo(width int) {
 // stopTraceAndAnalyze stops trace recording and sends collected data to the
 // agent for analysis.
 func (m *UI) stopTraceAndAnalyze() tea.Cmd {
-	data := trace.Stop()
-	if data == "" {
+	snapshot := trace.StopSnapshot()
+	if snapshot.DataJSONL == "" {
 		return util.ReportWarn("No trace data collected")
 	}
-	attachment := message.Attachment{
-		FileName: "trace.jsonl",
-		MimeType: "text/plain",
-		Content:  []byte(data),
+
+	record, err := m.com.Workspace.TraceSave(context.Background(), m.sessionID(), snapshot)
+	if err != nil {
+		slog.Error("Failed to save trace", "error", err)
+		return util.ReportWarn(fmt.Sprintf("Trace collected (%d events) but failed to save: %s", snapshot.EventCount, err))
 	}
-	return m.sendMessage("Analyze the following trace log captured during this Smith session. "+
+
+	attachment := message.Attachment{
+		FileName: record.ID + ".jsonl",
+		MimeType: "text/plain",
+		Content:  []byte(snapshot.DataJSONL),
+	}
+	return m.sendMessage(fmt.Sprintf("Trace saved as %s (%d events). ", record.ID, record.EventCount)+
+		"Analyze the following trace log captured during this Smith session. "+
 		"The trace records internal events (agent lifecycle, tool calls, errors, retries, summarization, message manipulation). "+
 		"Identify any anomalies or potential bugs, including but not limited to: "+
 		"orphaned tool_use or tool_result (mismatched IDs), excessive retries or errors, "+

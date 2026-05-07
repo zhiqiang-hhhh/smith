@@ -9,6 +9,7 @@ import (
 	"github.com/zhiqiang-hhhh/smith/internal/backend"
 	"github.com/zhiqiang-hhhh/smith/internal/proto"
 	"github.com/zhiqiang-hhhh/smith/internal/session"
+	"github.com/zhiqiang-hhhh/smith/internal/trace"
 )
 
 type controllerV1 struct {
@@ -933,6 +934,59 @@ func (c *controllerV1) handleGetWorkspacePermissionsSkip(w http.ResponseWriter, 
 		return
 	}
 	jsonEncode(w, proto.PermissionSkipRequest{Skip: skip})
+}
+
+// handlePostWorkspaceTraceSave saves a trace snapshot for a workspace.
+func (c *controllerV1) handlePostWorkspaceTraceSave(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+
+	var req proto.TraceSaveRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		c.server.logError(r, "Failed to decode request", "error", err)
+		jsonError(w, http.StatusBadRequest, "failed to decode request")
+		return
+	}
+
+	rec, err := c.backend.TraceSave(r.Context(), id, req.SessionID, traceSnapshotFromProto(req))
+	if err != nil {
+		c.handleError(w, r, err)
+		return
+	}
+	jsonEncode(w, traceRecordToProto(rec))
+}
+
+// handleGetWorkspaceTrace retrieves a trace record by ID.
+func (c *controllerV1) handleGetWorkspaceTrace(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+	traceID := r.PathValue("traceID")
+
+	rec, err := c.backend.TraceGet(r.Context(), id, traceID)
+	if err != nil {
+		c.handleError(w, r, err)
+		return
+	}
+	jsonEncode(w, traceRecordToProto(rec))
+}
+
+func traceSnapshotFromProto(req proto.TraceSaveRequest) trace.Snapshot {
+	return trace.Snapshot{
+		StartedAt:  req.StartedAt,
+		StoppedAt:  req.StoppedAt,
+		EventCount: req.EventCount,
+		DataJSONL:  req.DataJSONL,
+	}
+}
+
+func traceRecordToProto(r trace.Record) proto.TraceRecord {
+	return proto.TraceRecord{
+		ID:         r.ID,
+		SessionID:  r.SessionID,
+		StartedAt:  r.StartedAt,
+		StoppedAt:  r.StoppedAt,
+		EventCount: r.EventCount,
+		DataJSONL:  r.DataJSONL,
+		CreatedAt:  r.CreatedAt,
+	}
 }
 
 // handleError maps backend errors to HTTP status codes and writes the

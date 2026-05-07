@@ -36,6 +36,7 @@ import (
 	"github.com/zhiqiang-hhhh/smith/internal/render"
 	"github.com/zhiqiang-hhhh/smith/internal/session"
 	"github.com/zhiqiang-hhhh/smith/internal/skills"
+	"github.com/zhiqiang-hhhh/smith/internal/trace"
 	"golang.org/x/sync/errgroup"
 
 	"charm.land/fantasy/providers/anthropic"
@@ -90,6 +91,7 @@ type coordinator struct {
 	lspManager   *lsp.Manager
 	notify       pubsub.Publisher[notify.Notification]
 	renderServer *render.Server
+	traceService trace.Service
 
 	agentMu       sync.RWMutex
 	currentAgent  SessionAgent
@@ -115,6 +117,7 @@ func NewCoordinator(
 	lspManager *lsp.Manager,
 	notify pubsub.Publisher[notify.Notification],
 	renderServer *render.Server,
+	traceService trace.Service,
 ) (Coordinator, error) {
 	// Discover skills once at session start.
 	allSkills, activeSkills := discoverSkills(cfg)
@@ -130,6 +133,7 @@ func NewCoordinator(
 		lspManager:   lspManager,
 		notify:       notify,
 		renderServer: renderServer,
+		traceService: traceService,
 		agents:       make(map[string]SessionAgent),
 		allSkills:    allSkills,
 		activeSkills: activeSkills,
@@ -546,6 +550,10 @@ func (c *coordinator) buildTools(ctx context.Context, agent config.Agent) ([]fan
 			return nil, err
 		}
 		allTools = append(allTools, memorySearchTool)
+	}
+
+	if slices.Contains(agent.AllowedTools, tools.TraceGetToolName) {
+		allTools = append(allTools, c.traceGetTool(c.traceService))
 	}
 
 	// Get the model name for the agent

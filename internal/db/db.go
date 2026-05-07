@@ -33,6 +33,9 @@ func Prepare(ctx context.Context, db DBTX) (*Queries, error) {
 	if q.createSessionStmt, err = db.PrepareContext(ctx, createSession); err != nil {
 		return nil, fmt.Errorf("error preparing query CreateSession: %w", err)
 	}
+	if q.createTraceStmt, err = db.PrepareContext(ctx, createTrace); err != nil {
+		return nil, fmt.Errorf("error preparing query CreateTrace: %w", err)
+	}
 	if q.deleteFileStmt, err = db.PrepareContext(ctx, deleteFile); err != nil {
 		return nil, fmt.Errorf("error preparing query DeleteFile: %w", err)
 	}
@@ -84,6 +87,9 @@ func Prepare(ctx context.Context, db DBTX) (*Queries, error) {
 	if q.getSessionByIDStmt, err = db.PrepareContext(ctx, getSessionByID); err != nil {
 		return nil, fmt.Errorf("error preparing query GetSessionByID: %w", err)
 	}
+	if q.getTraceByIDStmt, err = db.PrepareContext(ctx, getTraceByID); err != nil {
+		return nil, fmt.Errorf("error preparing query GetTraceByID: %w", err)
+	}
 	if q.getSummaryMessageIDStmt, err = db.PrepareContext(ctx, getSummaryMessageID); err != nil {
 		return nil, fmt.Errorf("error preparing query GetSummaryMessageID: %w", err)
 	}
@@ -132,6 +138,9 @@ func Prepare(ctx context.Context, db DBTX) (*Queries, error) {
 	if q.listSessionsStmt, err = db.PrepareContext(ctx, listSessions); err != nil {
 		return nil, fmt.Errorf("error preparing query ListSessions: %w", err)
 	}
+	if q.listTracesBySessionStmt, err = db.PrepareContext(ctx, listTracesBySession); err != nil {
+		return nil, fmt.Errorf("error preparing query ListTracesBySession: %w", err)
+	}
 	if q.listUserMessagesBySessionStmt, err = db.PrepareContext(ctx, listUserMessagesBySession); err != nil {
 		return nil, fmt.Errorf("error preparing query ListUserMessagesBySession: %w", err)
 	}
@@ -168,6 +177,11 @@ func (q *Queries) Close() error {
 	if q.createSessionStmt != nil {
 		if cerr := q.createSessionStmt.Close(); cerr != nil {
 			err = fmt.Errorf("error closing createSessionStmt: %w", cerr)
+		}
+	}
+	if q.createTraceStmt != nil {
+		if cerr := q.createTraceStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing createTraceStmt: %w", cerr)
 		}
 	}
 	if q.deleteFileStmt != nil {
@@ -255,6 +269,11 @@ func (q *Queries) Close() error {
 			err = fmt.Errorf("error closing getSessionByIDStmt: %w", cerr)
 		}
 	}
+	if q.getTraceByIDStmt != nil {
+		if cerr := q.getTraceByIDStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing getTraceByIDStmt: %w", cerr)
+		}
+	}
 	if q.getSummaryMessageIDStmt != nil {
 		if cerr := q.getSummaryMessageIDStmt.Close(); cerr != nil {
 			err = fmt.Errorf("error closing getSummaryMessageIDStmt: %w", cerr)
@@ -335,6 +354,11 @@ func (q *Queries) Close() error {
 			err = fmt.Errorf("error closing listSessionsStmt: %w", cerr)
 		}
 	}
+	if q.listTracesBySessionStmt != nil {
+		if cerr := q.listTracesBySessionStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing listTracesBySessionStmt: %w", cerr)
+		}
+	}
 	if q.listUserMessagesBySessionStmt != nil {
 		if cerr := q.listUserMessagesBySessionStmt.Close(); cerr != nil {
 			err = fmt.Errorf("error closing listUserMessagesBySessionStmt: %w", cerr)
@@ -407,6 +431,7 @@ type Queries struct {
 	createFileStmt                  *sql.Stmt
 	createMessageStmt               *sql.Stmt
 	createSessionStmt               *sql.Stmt
+	createTraceStmt                 *sql.Stmt
 	deleteFileStmt                  *sql.Stmt
 	deleteMessageStmt               *sql.Stmt
 	deleteSessionStmt               *sql.Stmt
@@ -424,6 +449,7 @@ type Queries struct {
 	getMessageStmt                  *sql.Stmt
 	getRecentActivityStmt           *sql.Stmt
 	getSessionByIDStmt              *sql.Stmt
+	getTraceByIDStmt                *sql.Stmt
 	getSummaryMessageIDStmt         *sql.Stmt
 	getToolUsageStmt                *sql.Stmt
 	getTotalStatsStmt               *sql.Stmt
@@ -440,6 +466,7 @@ type Queries struct {
 	listRecentMessagesBySessionStmt *sql.Stmt
 	listSessionReadFilesStmt        *sql.Stmt
 	listSessionsStmt                *sql.Stmt
+	listTracesBySessionStmt         *sql.Stmt
 	listUserMessagesBySessionStmt   *sql.Stmt
 	recordFileReadStmt              *sql.Stmt
 	renameSessionStmt               *sql.Stmt
@@ -455,6 +482,7 @@ func (q *Queries) WithTx(tx *sql.Tx) *Queries {
 		createFileStmt:                  q.createFileStmt,
 		createMessageStmt:               q.createMessageStmt,
 		createSessionStmt:               q.createSessionStmt,
+		createTraceStmt:                 q.createTraceStmt,
 		deleteFileStmt:                  q.deleteFileStmt,
 		deleteMessageStmt:               q.deleteMessageStmt,
 		deleteSessionStmt:               q.deleteSessionStmt,
@@ -472,6 +500,7 @@ func (q *Queries) WithTx(tx *sql.Tx) *Queries {
 		getMessageStmt:                  q.getMessageStmt,
 		getRecentActivityStmt:           q.getRecentActivityStmt,
 		getSessionByIDStmt:              q.getSessionByIDStmt,
+		getTraceByIDStmt:                q.getTraceByIDStmt,
 		getSummaryMessageIDStmt:         q.getSummaryMessageIDStmt,
 		getToolUsageStmt:                q.getToolUsageStmt,
 		getTotalStatsStmt:               q.getTotalStatsStmt,
@@ -488,6 +517,7 @@ func (q *Queries) WithTx(tx *sql.Tx) *Queries {
 		listRecentMessagesBySessionStmt: q.listRecentMessagesBySessionStmt,
 		listSessionReadFilesStmt:        q.listSessionReadFilesStmt,
 		listSessionsStmt:                q.listSessionsStmt,
+		listTracesBySessionStmt:         q.listTracesBySessionStmt,
 		listUserMessagesBySessionStmt:   q.listUserMessagesBySessionStmt,
 		recordFileReadStmt:              q.recordFileReadStmt,
 		renameSessionStmt:               q.renameSessionStmt,

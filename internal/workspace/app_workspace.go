@@ -17,6 +17,7 @@ import (
 	"github.com/zhiqiang-hhhh/smith/internal/message"
 	"github.com/zhiqiang-hhhh/smith/internal/oauth"
 	"github.com/zhiqiang-hhhh/smith/internal/permission"
+	"github.com/zhiqiang-hhhh/smith/internal/trace"
 	"github.com/zhiqiang-hhhh/smith/internal/session"
 )
 
@@ -209,6 +210,16 @@ func (w *AppWorkspace) FileTrackerListReadFiles(ctx context.Context, sessionID s
 
 func (w *AppWorkspace) ListSessionHistory(ctx context.Context, sessionID string) ([]history.File, error) {
 	return w.app.History.ListBySession(ctx, sessionID)
+}
+
+// -- Traces --
+
+func (w *AppWorkspace) TraceSave(ctx context.Context, sessionID string, snapshot trace.Snapshot) (trace.Record, error) {
+	return w.app.Traces.Save(ctx, sessionID, snapshot)
+}
+
+func (w *AppWorkspace) TraceGet(ctx context.Context, traceID string) (trace.Record, error) {
+	return w.app.Traces.Get(ctx, traceID)
 }
 
 // -- LSP --

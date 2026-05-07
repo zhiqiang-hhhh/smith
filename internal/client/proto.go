@@ -766,3 +766,37 @@ func (c *Client) LSPStopAll(ctx context.Context, id string) error {
 	}
 	return nil
 }
+
+// TraceSave saves a trace snapshot for a workspace.
+func (c *Client) TraceSave(ctx context.Context, workspaceID string, req proto.TraceSaveRequest) (*proto.TraceRecord, error) {
+	rsp, err := c.post(ctx, fmt.Sprintf("/workspaces/%s/traces", workspaceID), nil, jsonBody(req), http.Header{"Content-Type": []string{"application/json"}})
+	if err != nil {
+		return nil, fmt.Errorf("failed to save trace: %w", err)
+	}
+	defer rsp.Body.Close()
+	if rsp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("failed to save trace: status code %d", rsp.StatusCode)
+	}
+	var rec proto.TraceRecord
+	if err := json.NewDecoder(rsp.Body).Decode(&rec); err != nil {
+		return nil, fmt.Errorf("failed to decode trace record: %w", err)
+	}
+	return &rec, nil
+}
+
+// TraceGet retrieves a trace record by ID.
+func (c *Client) TraceGet(ctx context.Context, workspaceID string, traceID string) (*proto.TraceRecord, error) {
+	rsp, err := c.get(ctx, fmt.Sprintf("/workspaces/%s/traces/%s", workspaceID, traceID), nil, nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get trace: %w", err)
+	}
+	defer rsp.Body.Close()
+	if rsp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("failed to get trace: status code %d", rsp.StatusCode)
+	}
+	var rec proto.TraceRecord
+	if err := json.NewDecoder(rsp.Body).Decode(&rec); err != nil {
+		return nil, fmt.Errorf("failed to decode trace record: %w", err)
+	}
+	return &rec, nil
+}

@@ -20,39 +20,55 @@ type Event struct {
 	Data      map[string]any `json:"data,omitempty"`
 }
 
+type Snapshot struct {
+	SessionID  string
+	StartedAt  int64
+	StoppedAt  int64
+	EventCount int
+	DataJSONL  string
+}
+
 var (
-	mu     sync.Mutex
-	active bool
-	events []Event
+	mu        sync.Mutex
+	active    bool
+	sessionID string
+	startedAt int64
+	events    []Event
 )
 
-// Start begins recording trace events in memory.
-func Start() {
+// Start begins recording trace events in memory for the given session.
+func Start(id string) {
 	mu.Lock()
 	defer mu.Unlock()
 
+	now := time.Now().UTC()
 	active = true
+	sessionID = id
+	startedAt = now.Unix()
 	events = []Event{{
-		Time:     time.Now().UTC().Format(time.RFC3339Nano),
-		Category: "trace",
-		Event:    "started",
+		Time:      now.Format(time.RFC3339Nano),
+		Category:  "trace",
+		Event:     "started",
+		SessionID: id,
 	}}
 }
 
-// Stop ends recording and returns all collected events as a JSONL string.
-// Returns empty string if tracing was not active.
-func Stop() string {
+// StopSnapshot ends recording and returns all collected events.
+// The zero Snapshot is returned if tracing was not active.
+func StopSnapshot() Snapshot {
 	mu.Lock()
 	defer mu.Unlock()
 
 	if !active {
-		return ""
+		return Snapshot{}
 	}
 
+	now := time.Now().UTC()
 	events = append(events, Event{
-		Time:     time.Now().UTC().Format(time.RFC3339Nano),
-		Category: "trace",
-		Event:    "stopped",
+		Time:      now.Format(time.RFC3339Nano),
+		Category:  "trace",
+		Event:     "stopped",
+		SessionID: sessionID,
 	})
 
 	var sb strings.Builder
@@ -62,10 +78,24 @@ func Stop() string {
 		_ = enc.Encode(e)
 	}
 
-	result := sb.String()
+	result := Snapshot{
+		SessionID:  sessionID,
+		StartedAt:  startedAt,
+		StoppedAt:  now.Unix(),
+		EventCount: len(events),
+		DataJSONL:  sb.String(),
+	}
 	active = false
+	sessionID = ""
+	startedAt = 0
 	events = nil
 	return result
+}
+
+// Stop ends recording and returns all collected events as a JSONL string.
+// Returns empty string if tracing was not active.
+func Stop() string {
+	return StopSnapshot().DataJSONL
 }
 
 // IsActive reports whether tracing is currently active.
